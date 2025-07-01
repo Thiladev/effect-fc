@@ -1,0 +1,44 @@
+{
+  "name": "effect-fc",
+  "version": "0.1.0",
+  "type": "module",
+  "files": [
+    "./README.md",
+    "./dist"
+  ],
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/Thiladev/effect-fc.git"
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/types/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint:tsc": "tsc --noEmit",
+    "pack": "npm pack",
+    "clean:cache": "rm -f tsconfig.tsbuildinfo",
+    "clean:dist": "rm -rf dist",
+    "clean:node": "rm -rf node_modules"
+  },
+  "peerDependencies": {
+    "@types/react": "^19.0.0",
+    "effect": "^3.15.0",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@effect/language-service": "^0.23.3"
+  }
+}

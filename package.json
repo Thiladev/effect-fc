@@ -1,0 +1,23 @@
+{
+  "name": "@effect-fc/monorepo",
+  "packageManager": "bun@1.2.13",
+  "private": true,
+  "workspaces": [
+    "./packages/*"
+  ],
+  "scripts": {
+    "build": "turbo build --filter=!@effect-fc/example",
+    "lint:tsc": "turbo lint:tsc",
+    "pack": "turbo pack --filter=!@effect-fc/example",
+    "publish": "turbo publish --filter=!@effect-fc/example",
+    "clean:cache": "rm -f tsconfig.tsbuildinfo",
+    "clean:dist": "rm -rf dist",
+    "clean:node": "rm -rf node_modules"
+  },
+  "devDependencies": {
+    "npm-check-updates": "^18.0.1",
+    "npm-sort": "^0.0.4",
+    "turbo": "^2.5.3",
+    "typescript": "^5.8.3"
+  }
+}

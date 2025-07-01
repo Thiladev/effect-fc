@@ -1,0 +1,50 @@
+{
+  "name": "@effect-fc/example",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint:tsc": "tsc --noEmit",
+    "lint:eslint": "eslint .",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.26.0",
+    "@tanstack/react-router": "^1.120.3",
+    "@tanstack/react-router-devtools": "^1.120.3",
+    "@tanstack/router-plugin": "^1.120.3",
+    "@thilawyn/thilaschema": "^0.1.4",
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.5",
+    "@vitejs/plugin-react": "^4.4.1",
+    "eslint": "^9.26.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "globals": "^16.1.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "typescript-eslint": "^8.32.1",
+    "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "@effect/platform": "^0.82.1",
+    "@effect/platform-browser": "^0.62.1",
+    "@radix-ui/themes": "^3.2.1",
+    "@typed/async-data": "^0.13.1",
+    "@typed/id": "^0.17.2",
+    "@typed/lazy-ref": "^0.3.3",
+    "effect": "^3.15.1",
+    "lucide-react": "^0.510.0",
+    "mobx": "^6.13.7",
+    "effect-fc": "workspace:*"
+  },
+  "overrides": {
+    "effect": "^3.15.1",
+    "@effect/platform": "^0.82.1",
+    "@effect/platform-browser": "^0.62.1",
+    "@typed/lazy-ref": "^0.3.3",
+    "@typed/async-data": "^0.13.1"
+  }
+}
