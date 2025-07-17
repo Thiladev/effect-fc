@@ -1,3 +1,3 @@
-export * as ReactComponent from "./ReactComponent.js"
-export * as ReactHook from "./ReactHook.js"
+export * as Component from "./Component.js"
+export * as Hook from "./Hook.js"
 export * as ReactManagedRuntime from "./ReactManagedRuntime.js"

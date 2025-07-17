@@ -1,5 +1,6 @@
 {
   "name": "effect-fc",
+  "description": "Write React function components using Effect generators",
   "version": "0.1.0",
   "type": "module",
   "files": [

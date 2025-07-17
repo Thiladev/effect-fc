@@ -1,4 +1,4 @@
-import { Effect, Effectable, Option, Readable, Ref, Stream, Subscribable, SubscriptionRef, SynchronizedRef, type Types, type Unify } from "effect"
+import { Chunk, Effect, Effectable, Option, Readable, Ref, Stream, Subscribable, SubscriptionRef, SynchronizedRef, type Types, type Unify } from "effect"
 import * as PropertyPath from "./PropertyPath.js"
 
 
@@ -52,7 +52,7 @@ class SubscriptionSubRefImpl<in out A, in out B> extends Effectable.Class<A> imp
         readonly setter: (parentValue: B, value: A) => B,
     ) {
         super()
-        this.get = Effect.map(Ref.get(this.parent), this.getter)
+        this.get = Effect.map(this.parent, this.getter)
     }
 
     commit() {
@@ -86,9 +86,11 @@ class SubscriptionSubRefImpl<in out A, in out B> extends Effectable.Class<A> imp
 
 export const makeFromGetSet = <A, B>(
     parent: SubscriptionRef.SubscriptionRef<B>,
-    getter: (parentValue: B) => A,
-    setter: (parentValue: B, value: A) => B,
-): SubscriptionSubRef<A, B> => new SubscriptionSubRefImpl(parent, getter, setter)
+    options: {
+        readonly get: (parentValue: B) => A
+        readonly set: (parentValue: B, value: A) => B
+    },
+): SubscriptionSubRef<A, B> => new SubscriptionSubRefImpl(parent, options.get, options.set)
 
 export const makeFromPath = <B, const P extends PropertyPath.Paths<B>>(
     parent: SubscriptionRef.SubscriptionRef<B>,
@@ -97,4 +99,13 @@ export const makeFromPath = <B, const P extends PropertyPath.Paths<B>>(
     parent,
     parentValue => Option.getOrThrow(PropertyPath.get(parentValue, path)),
     (parentValue, value) => Option.getOrThrow(PropertyPath.immutableSet(parentValue, path, value)),
+)
+
+export const makeFromChunkRef = <A>(
+    parent: SubscriptionRef.SubscriptionRef<Chunk.Chunk<A>>,
+    index: number,
+): SubscriptionSubRef<A, Chunk.Chunk<A>> => new SubscriptionSubRefImpl(
+    parent,
+    parentValue => Chunk.unsafeGet(parentValue, index),
+    (parentValue, value) => Chunk.replace(parentValue, index, value),
 )

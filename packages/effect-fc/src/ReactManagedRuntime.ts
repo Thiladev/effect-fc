@@ -16,31 +16,31 @@ export const make = <R, ER>(
 })
 
 
-export interface AsyncProviderProps<R, ER> extends React.SuspenseProps {
+export interface ProviderProps<R, ER> extends React.SuspenseProps {
     readonly runtime: ReactManagedRuntime<R, ER>
     readonly children?: React.ReactNode
 }
 
-export function AsyncProvider<R, ER>(
-    { runtime, children, ...suspenseProps }: AsyncProviderProps<R, ER>
+export function Provider<R, ER>(
+    { runtime, children, ...suspenseProps }: ProviderProps<R, ER>
 ): React.ReactNode {
     const promise = React.useMemo(() => Effect.runPromise(runtime.runtime.runtimeEffect), [runtime])
 
     return React.createElement(
         React.Suspense,
         suspenseProps,
-        React.createElement(AsyncProviderInner<R, ER>, { runtime, promise, children }),
+        React.createElement(ProviderInner<R, ER>, { runtime, promise, children }),
     )
 }
 
-interface AsyncProviderInnerProps<R, ER> {
+interface ProviderInnerProps<R, ER> {
     readonly runtime: ReactManagedRuntime<R, ER>
     readonly promise: Promise<Runtime.Runtime<R>>
     readonly children?: React.ReactNode
 }
 
-function AsyncProviderInner<R, ER>(
-    { runtime, promise, children }: AsyncProviderInnerProps<R, ER>
+function ProviderInner<R, ER>(
+    { runtime, promise, children }: ProviderInnerProps<R, ER>
 ): React.ReactNode {
     const value = React.use(promise)
     return React.createElement(runtime.context, { value }, children)
