@@ -329,15 +329,22 @@ export const withOptions: {
 ))
 
 export const withRuntime: {
-    <E, R, P extends {}>(
+    <T extends Component<any, R, any>, R>(
         context: React.Context<Runtime.Runtime<R>>,
-    ): (self: Component<E, R | Scope.Scope, P>) => React.FC<P>
+    ): (self: T) => React.FC<T extends Suspense
+        ? Component.Props<T> & SuspenseProps
+        : Component.Props<T>
+    >
     <E, R, P extends {}>(
-        self: Component<E, R | Scope.Scope, P>,
+        self: Component<E, R, P> & Suspense,
+        context: React.Context<Runtime.Runtime<R>>,
+    ): React.FC<P & SuspenseProps>
+    <E, R, P extends {}>(
+        self: Component<E, R, P>,
         context: React.Context<Runtime.Runtime<R>>,
     ): React.FC<P>
 } = Function.dual(2, <E, R, P extends {}>(
-    self: Component<E, R | Scope.Scope, P>,
+    self: Component<E, R, P>,
     context: React.Context<Runtime.Runtime<R>>,
 ): React.FC<P> => function WithRuntime(props) {
     const runtime = React.useContext(context)

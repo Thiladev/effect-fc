@@ -2,11 +2,12 @@ import { runtime } from "@/runtime"
 import { Flex, Text, TextField } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
 import { GetRandomValues, makeUuid4 } from "@typed/id"
-import { Console, Effect } from "effect"
+import { Effect } from "effect"
 import { Component, Hook } from "effect-fc"
 import * as React from "react"
 
 
+// Generator version
 const RouteComponent = Component.make(function* AsyncRendering() {
     const VMemoizedAsyncComponent = yield* Component.useFC(MemoizedAsyncComponent)
     const VAsyncComponent = yield* Component.useFC(AsyncComponent)
@@ -27,9 +28,29 @@ const RouteComponent = Component.make(function* AsyncRendering() {
     Component.withRuntime(runtime.context)
 )
 
-const AsyncComponent = Component.make(function* AsyncComponent() {
-    yield* Console.log("rendering")
+// Pipeline version
+// const RouteComponent = Component.make("RouteComponent")(() => Effect.Do,
+//     Effect.bind("VMemoizedAsyncComponent", () => Component.useFC(MemoizedAsyncComponent)),
+//     Effect.bind("VAsyncComponent", () => Component.useFC(AsyncComponent)),
+//     Effect.let("input", () => React.useState("")),
 
+//     Effect.map(({ input: [input, setInput], VAsyncComponent, VMemoizedAsyncComponent }) =>
+//         <Flex direction="column" align="stretch" gap="2">
+//             <TextField.Root
+//                 value={input}
+//                 onChange={e => setInput(e.target.value)}
+//             />
+
+//             <VMemoizedAsyncComponent />
+//             <VAsyncComponent />
+//         </Flex>
+//     ),
+// ).pipe(
+//     Component.withRuntime(runtime.context)
+// )
+
+
+const AsyncComponent = Component.make(function* AsyncComponent() {
     const VSubComponent = yield* Component.useFC(SubComponent)
     yield* Effect.sleep("500 millis")
 

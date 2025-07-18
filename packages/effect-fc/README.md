@@ -11,7 +11,7 @@ Documentation is currently being written. In the meantime, you can take a look a
 - `react` & `@types/react` 19+
 
 ## Known issues
-- Hot module replacement doesn't work for Effect FC's yet. Page reload is required to view changes. Regular React components are unaffected.
+- React Refresh replacement doesn't work for Effect FC's yet. Page reload is required to view changes. Regular React components are unaffected.
 
 ## What writing components looks like
 ```typescript

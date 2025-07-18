@@ -2,7 +2,7 @@ import { Chunk, Effect, Effectable, Option, Readable, Ref, Stream, Subscribable,
 import * as PropertyPath from "./PropertyPath.js"
 
 
-export const SubscriptionSubRefTypeId: unique symbol = Symbol.for("reffuse/types/SubscriptionSubRef")
+export const SubscriptionSubRefTypeId: unique symbol = Symbol.for("effect-fc/types/SubscriptionSubRef")
 export type SubscriptionSubRefTypeId = typeof SubscriptionSubRefTypeId
 
 export interface SubscriptionSubRef<in out A, in out B> extends SubscriptionSubRef.Variance<A, B>, SubscriptionRef.SubscriptionRef<A> {
