@@ -2,7 +2,7 @@ import * as Domain from "@/domain"
 import { Box, Button, Flex, IconButton, TextArea } from "@radix-ui/themes"
 import { GetRandomValues, makeUuid4 } from "@typed/id"
 import { Chunk, Effect, Match, Option, Ref, Runtime, SubscriptionRef } from "effect"
-import { Component, Hook } from "effect-fc"
+import { Component, Hook, Memoized } from "effect-fc"
 import { SubscriptionSubRef } from "effect-fc/types"
 import { FaArrowDown, FaArrowUp } from "react-icons/fa"
 import { FaDeleteLeft } from "react-icons/fa6"
@@ -24,7 +24,7 @@ export type TodoProps = (
     | { readonly _tag: "edit", readonly index: number }
 )
 
-export const Todo = Component.make(function* Todo(props: TodoProps) {
+export class Todo extends Component.make(function* Todo(props: TodoProps) {
     const runtime = yield* Effect.runtime()
     const state = yield* TodosState
 
@@ -111,5 +111,5 @@ export const Todo = Component.make(function* Todo(props: TodoProps) {
         </Flex>
     )
 }).pipe(
-    Component.memo
-)
+    Memoized.memo
+) {}

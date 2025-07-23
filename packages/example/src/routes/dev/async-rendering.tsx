@@ -3,14 +3,14 @@ import { Flex, Text, TextField } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
 import { GetRandomValues, makeUuid4 } from "@typed/id"
 import { Effect } from "effect"
-import { Component, Hook } from "effect-fc"
+import { Component, Hook, Memoized, Suspense } from "effect-fc"
 import * as React from "react"
 
 
 // Generator version
 const RouteComponent = Component.make(function* AsyncRendering() {
-    const VMemoizedAsyncComponent = yield* Component.useFC(MemoizedAsyncComponent)
-    const VAsyncComponent = yield* Component.useFC(AsyncComponent)
+    const MemoizedAsyncComponentFC = yield* MemoizedAsyncComponent
+    const AsyncComponentFC = yield* AsyncComponent
     const [input, setInput] = React.useState("")
 
     return (
@@ -20,8 +20,8 @@ const RouteComponent = Component.make(function* AsyncRendering() {
                 onChange={e => setInput(e.target.value)}
             />
 
-            <VMemoizedAsyncComponent />
-            <VAsyncComponent />
+            <MemoizedAsyncComponentFC fallback={React.useMemo(() => <p>Loading memoized...</p>, [])} />
+            <AsyncComponentFC />
         </Flex>
     )
 }).pipe(
@@ -50,25 +50,28 @@ const RouteComponent = Component.make(function* AsyncRendering() {
 // )
 
 
-const AsyncComponent = Component.make(function* AsyncComponent() {
-    const VSubComponent = yield* Component.useFC(SubComponent)
-    yield* Effect.sleep("500 millis")
+class AsyncComponent extends Component.make(function* AsyncComponent() {
+    const SubComponentFC = yield* SubComponent
+
+    yield* Effect.sleep("500 millis") // Async operation
+    // Cannot use React hooks after the async operation
 
     return (
         <Flex direction="column" align="stretch">
             <Text>Rendered!</Text>
-            <VSubComponent />
+            <SubComponentFC />
         </Flex>
     )
 }).pipe(
-    Component.suspense
-)
-const MemoizedAsyncComponent = Component.memo(AsyncComponent)
+    Suspense.suspense,
+    Suspense.withOptions({ defaultFallback: <p>Loading...</p> }),
+) {}
+class MemoizedAsyncComponent extends Memoized.memo(AsyncComponent) {}
 
-const SubComponent = Component.make(function* SubComponent() {
+class SubComponent extends Component.make(function* SubComponent() {
     const [state] = React.useState(yield* Hook.useOnce(() => Effect.provide(makeUuid4, GetRandomValues.CryptoRandom)))
     return <Text>{state}</Text>
-})
+}) {}
 
 export const Route = createFileRoute("/dev/async-rendering")({
     component: RouteComponent

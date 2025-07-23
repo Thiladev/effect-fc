@@ -15,15 +15,12 @@ Documentation is currently being written. In the meantime, you can take a look a
 
 ## What writing components looks like
 ```typescript
-import { Container, Flex, Heading } from "@radix-ui/themes"
-import { Chunk, Console, Effect } from "effect"
-import { Component, Hook } from "effect-fc"
+import { Component, Hook, Memoized } from "effect-fc"
 import { Todo } from "./Todo"
 import { TodosState } from "./TodosState.service"
+import { runtime } from "@/runtime"
 
-//           Component.Component<never, TodosState | Scope, {}>
-//           VVV
-export const Todos = Component.make(function* Todos() {
+class Todos extends Component.make(function* Todos() {
     const state = yield* TodosState
     const [todos] = yield* Hook.useSubscribeRefs(state.ref)
 
@@ -32,20 +29,31 @@ export const Todos = Component.make(function* Todos() {
         Effect.addFinalizer(() => Console.log("Todos unmounted")),
     ))
 
-    const VTodo = yield* Component.useFC(Todo)
+    const TodoFC = yield* Component.useFC(Todo)
 
     return (
         <Container>
             <Heading align="center">Todos</Heading>
 
             <Flex direction="column" align="stretch" gap="2" mt="2">
-                <VTodo _tag="new" />
+                <TodoFC _tag="new" />
 
                 {Chunk.map(todos, (v, k) =>
-                    <VTodo key={v.id} _tag="edit" index={k} />
+                    <TodoFC key={v.id} _tag="edit" index={k} />
                 )}
             </Flex>
         </Container>
     )
-})
+}).pipe(
+    Memoized.memo
+) {}
+
+const TodosEntrypoint = Component.make(function* TodosEntrypoint() {
+    const context = yield* Hook.useContext(TodosState.Default, { finalizerExecutionMode: "fork" })
+    const TodosFC = yield* Effect.provide(Component.useFC(Todos), context)
+
+    return <TodosFC />
+}).pipe(
+    Component.withRuntime(runtime.context)
+)
 ```

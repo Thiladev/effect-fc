@@ -10,16 +10,11 @@ const TodosStateLive = TodosState.Default("todos")
 
 export const Route = createFileRoute("/")({
     component: Component.make(function* Index() {
-        const context = yield* Hook.useContext(TodosStateLive, { finalizerExecutionMode: "fork" })
-        return yield* Effect.provide(Component.use(Todos, Todos => <Todos />), context)
+        return yield* Todos.pipe(
+            Effect.map(FC => <FC />),
+            Effect.provide(yield* Hook.useContext(TodosStateLive, { finalizerExecutionMode: "fork" })),
+        )
     }).pipe(
         Component.withRuntime(runtime.context)
     )
-
-    // component: Component.make("Index")(
-    //     () => Hook.useContext(TodosStateLive, { finalizerExecutionMode: "fork" }),
-    //     Effect.andThen(context => Effect.provide(Component.use(Todos, Todos => <Todos />), context)),
-    // ).pipe(
-    //     Component.withRuntime(runtime.context)
-    // )
 })

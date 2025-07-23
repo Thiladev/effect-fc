@@ -5,7 +5,7 @@ import { Todo } from "./Todo"
 import { TodosState } from "./TodosState.service"
 
 
-export const Todos = Component.make(function* Todos() {
+export class Todos extends Component.make(function* Todos() {
     const state = yield* TodosState
     const [todos] = yield* Hook.useSubscribeRefs(state.ref)
 
@@ -14,19 +14,19 @@ export const Todos = Component.make(function* Todos() {
         Effect.addFinalizer(() => Console.log("Todos unmounted")),
     ))
 
-    const VTodo = yield* Component.useFC(Todo)
+    const TodoFC = yield* Todo
 
     return (
         <Container>
             <Heading align="center">Todos</Heading>
 
             <Flex direction="column" align="stretch" gap="2" mt="2">
-                <VTodo _tag="new" />
+                <TodoFC _tag="new" />
 
                 {Chunk.map(todos, (v, k) =>
-                    <VTodo key={v.id} _tag="edit" index={k} />
+                    <TodoFC key={v.id} _tag="edit" index={k} />
                 )}
             </Flex>
         </Container>
     )
-})
+}) {}

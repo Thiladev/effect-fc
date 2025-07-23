@@ -1,0 +1,74 @@
+import { Effect, Function, Predicate, Runtime, Scope } from "effect"
+import * as React from "react"
+import type * as Component from "./Component.js"
+import type { ExcludeKeys } from "./utils.js"
+
+
+export const TypeId: unique symbol = Symbol.for("effect-fc/Suspense")
+export type TypeId = typeof TypeId
+
+export interface Suspense extends Suspense.Options {
+    readonly [TypeId]: TypeId
+}
+
+export namespace Suspense {
+    export interface Options {
+        readonly defaultFallback?: React.ReactNode
+    }
+
+    export type Props = Omit<React.SuspenseProps, "children">
+}
+
+
+const SuspenseProto = Object.freeze({
+    [TypeId]: TypeId,
+    makeFunctionComponent(
+        this: Component.Component<any, any, any> & Suspense,
+        runtimeRef: React.RefObject<Runtime.Runtime<any>>,
+        scope: Scope.Scope,
+    ): React.FC<any> {
+        const SuspenseInner = (props: { readonly promise: Promise<React.ReactNode> }) => React.use(props.promise)
+
+        return ({ fallback, name, ...props }: Suspense.Props) => {
+            const promise = Runtime.runPromise(runtimeRef.current)(
+                Effect.provideService(this.body(props), Scope.Scope, scope)
+            )
+
+            return React.createElement(
+                React.Suspense,
+                { fallback: fallback ?? this.defaultFallback, name },
+                React.createElement(SuspenseInner, { promise }),
+            )
+        }
+    },
+} as const)
+
+
+export const isSuspense = (u: unknown): u is Suspense => Predicate.hasProperty(u, TypeId)
+
+export const suspense = <T extends Component.Component<P, any, any>, P extends {}>(
+    self: T & Component.Component<ExcludeKeys<P, keyof Suspense.Props>, any, any>
+): (
+    & Omit<T, keyof Component.Component<P, Component.Component.Error<T>, Component.Component.Context<T>>>
+    & Component.Component<P & Suspense.Props, Component.Component.Error<T>, Component.Component.Context<T>>
+    & Suspense
+) => Object.setPrototypeOf(
+    Object.assign(function() {}, self, SuspenseProto),
+    Object.getPrototypeOf(self),
+)
+
+export const withOptions: {
+    <T extends Component.Component<any, any, any> & Suspense>(
+        options: Partial<Suspense.Options>
+    ): (self: T) => T
+    <T extends Component.Component<any, any, any> & Suspense>(
+        self: T,
+        options: Partial<Suspense.Options>,
+    ): T
+} = Function.dual(2, <T extends Component.Component<any, any, any> & Suspense>(
+    self: T,
+    options: Partial<Suspense.Options>,
+): T => Object.setPrototypeOf(
+    Object.assign(function() {}, self, options),
+    Object.getPrototypeOf(self),
+))
