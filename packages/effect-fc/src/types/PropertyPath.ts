@@ -38,8 +38,7 @@ export type ValueFromPath<T, P extends any[]> = P extends [infer Head, ...infer 
             : never
     : T
 
-export type AnyKey = string | number | symbol
-export type AnyPath = readonly AnyKey[]
+export type AnyPath = readonly PropertyKey[]
 
 
 export const unsafeGet: {

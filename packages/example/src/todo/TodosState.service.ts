@@ -2,11 +2,11 @@ import { Todo } from "@/domain"
 import { KeyValueStore } from "@effect/platform"
 import { BrowserKeyValueStore } from "@effect/platform-browser"
 import { Chunk, Console, Effect, Option, Schema, Stream, SubscriptionRef } from "effect"
-import { SubscriptionSubRef } from "effect-fc/types"
+import { Subscribable, SubscriptionSubRef } from "effect-fc/types"
 
 
 export class TodosState extends Effect.Service<TodosState>()("TodosState", {
-    effect: Effect.fn("TodosState")(function*(key: string) {
+    scoped: Effect.fnUntraced(function*(key: string) {
         const kv = yield* KeyValueStore.KeyValueStore
 
         const readFromLocalStorage = Console.log("Reading todos from local storage...").pipe(
@@ -18,7 +18,6 @@ export class TodosState extends Effect.Service<TodosState>()("TodosState", {
                 onNone: () => Effect.succeed(Chunk.empty()),
             }))
         )
-
         const saveToLocalStorage = (todos: Chunk.Chunk<Todo.Todo>) => Effect.andThen(
             Console.log("Saving todos to local storage..."),
             Chunk.isNonEmpty(todos)
@@ -32,8 +31,6 @@ export class TodosState extends Effect.Service<TodosState>()("TodosState", {
         )
 
         const ref = yield* SubscriptionRef.make(yield* readFromLocalStorage)
-        const sizeRef = SubscriptionSubRef.makeFromPath(ref, ["length"])
-
         yield* Effect.forkScoped(ref.changes.pipe(
             Stream.debounce("500 millis"),
             Stream.runForEach(saveToLocalStorage),
@@ -43,7 +40,54 @@ export class TodosState extends Effect.Service<TodosState>()("TodosState", {
             Effect.ignore,
         ))
 
-        return { ref, sizeRef } as const
+        const sizeSubscribable = Subscribable.make({
+            get: Effect.andThen(ref, Chunk.size),
+            get changes() { return Stream.map(ref.changes, Chunk.size) },
+        })
+        const getElementRef = (id: string) => SubscriptionSubRef.makeFromChunkFindFirst(ref, v => v.id === id)
+        const getIndexSubscribable = (id: string) => Subscribable.make({
+            get: Effect.flatMap(ref, Chunk.findFirstIndex(v => v.id === id)),
+            get changes() { return Stream.flatMap(ref.changes, Chunk.findFirstIndex(v => v.id === id)) },
+        })
+
+        const moveLeft = (id: string) => SubscriptionRef.updateEffect(ref, todos => Effect.Do.pipe(
+            Effect.bind("index", () => Chunk.findFirstIndex(todos, v => v.id === id)),
+            Effect.bind("todo", ({ index }) => Chunk.get(todos, index)),
+            Effect.bind("previous", ({ index }) => Chunk.get(todos, index - 1)),
+            Effect.andThen(({ todo, index, previous }) => index > 0
+                ? todos.pipe(
+                    Chunk.replace(index, previous),
+                    Chunk.replace(index - 1, todo),
+                )
+                : todos
+            ),
+        ))
+        const moveRight = (id: string) => SubscriptionRef.updateEffect(ref, todos => Effect.Do.pipe(
+            Effect.bind("index", () => Chunk.findFirstIndex(todos, v => v.id === id)),
+            Effect.bind("todo", ({ index }) => Chunk.get(todos, index)),
+            Effect.bind("next", ({ index }) => Chunk.get(todos, index + 1)),
+            Effect.andThen(({ todo, index, next }) => index < Chunk.size(todos) - 1
+                ? todos.pipe(
+                    Chunk.replace(index, next),
+                    Chunk.replace(index + 1, todo),
+                )
+                : todos
+            ),
+        ))
+        const remove = (id: string) => SubscriptionRef.updateEffect(ref, todos => Effect.andThen(
+            Chunk.findFirstIndex(todos, v => v.id === id),
+            index => Chunk.remove(todos, index),
+        ))
+
+        return {
+            ref,
+            sizeSubscribable,
+            getElementRef,
+            getIndexSubscribable,
+            moveLeft,
+            moveRight,
+            remove,
+        } as const
     }),
 
     dependencies: [BrowserKeyValueStore.layerLocalStorage],

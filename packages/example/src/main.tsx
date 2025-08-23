@@ -1,5 +1,5 @@
 import { createRouter, RouterProvider } from "@tanstack/react-router"
-import { ReactManagedRuntime } from "effect-fc"
+import { ReactRuntime } from "effect-fc"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { routeTree } from "./routeTree.gen"
@@ -16,8 +16,8 @@ declare module "@tanstack/react-router" {
 
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
-        <ReactManagedRuntime.Provider runtime={runtime}>
+        <ReactRuntime.Provider runtime={runtime}>
             <RouterProvider router={router} />
-        </ReactManagedRuntime.Provider>
+        </ReactRuntime.Provider>
     </StrictMode>
 )

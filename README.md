@@ -4,4 +4,4 @@
 
 This monorepo contains:
 - [The `effect-fc` library](packages/effect-fc)
-- [An example project](packges/example)
+- [An example project](packages/example)

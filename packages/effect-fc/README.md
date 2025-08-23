@@ -11,25 +11,26 @@ Documentation is currently being written. In the meantime, you can take a look a
 - `react` & `@types/react` 19+
 
 ## Known issues
-- React Refresh replacement doesn't work for Effect FC's yet. Page reload is required to view changes. Regular React components are unaffected.
+- React Refresh doesn't work for Effect FC's yet. Page reload is required to view changes. Regular React components are unaffected.
 
 ## What writing components looks like
 ```typescript
-import { Component, Hook, Memoized } from "effect-fc"
+import { Component } from "effect-fc"
+import { useOnce, useSubscribe } from "effect-fc/hooks"
 import { Todo } from "./Todo"
 import { TodosState } from "./TodosState.service"
-import { runtime } from "@/runtime"
 
-class Todos extends Component.make(function* Todos() {
+
+export class Todos extends Component.makeUntraced(function* Todos() {
     const state = yield* TodosState
-    const [todos] = yield* Hook.useSubscribeRefs(state.ref)
+    const [todos] = yield* useSubscribe(state.ref)
 
-    yield* Hook.useOnce(() => Effect.andThen(
+    yield* useOnce(() => Effect.andThen(
         Console.log("Todos mounted"),
         Effect.addFinalizer(() => Console.log("Todos unmounted")),
     ))
 
-    const TodoFC = yield* Component.useFC(Todo)
+    const TodoFC = yield* Todo
 
     return (
         <Container>
@@ -38,22 +39,26 @@ class Todos extends Component.make(function* Todos() {
             <Flex direction="column" align="stretch" gap="2" mt="2">
                 <TodoFC _tag="new" />
 
-                {Chunk.map(todos, (v, k) =>
-                    <TodoFC key={v.id} _tag="edit" index={k} />
+                {Chunk.map(todos, todo =>
+                    <TodoFC key={todo.id} _tag="edit" id={todo.id} />
                 )}
             </Flex>
         </Container>
     )
-}).pipe(
-    Memoized.memo
-) {}
+}) {}
 
-const TodosEntrypoint = Component.make(function* TodosEntrypoint() {
-    const context = yield* Hook.useContext(TodosState.Default, { finalizerExecutionMode: "fork" })
-    const TodosFC = yield* Effect.provide(Component.useFC(Todos), context)
+const TodosStateLive = TodosState.Default("todos")
+
+const Index = Component.makeUntraced(function* Index() {
+    const context = yield* useContext(TodosStateLive, { finalizerExecutionMode: "fork" })
+    const TodosFC = yield* Effect.provide(Todos, context)
 
     return <TodosFC />
 }).pipe(
     Component.withRuntime(runtime.context)
 )
+
+export const Route = createFileRoute("/")({
+    component: Index
+})
 ```

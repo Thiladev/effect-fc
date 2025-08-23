@@ -3,12 +3,13 @@ import { Flex, Text, TextField } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
 import { GetRandomValues, makeUuid4 } from "@typed/id"
 import { Effect } from "effect"
-import { Component, Hook, Memoized, Suspense } from "effect-fc"
+import { Component, Memo, Suspense } from "effect-fc"
+import { Hooks } from "effect-fc/hooks"
 import * as React from "react"
 
 
 // Generator version
-const RouteComponent = Component.make(function* AsyncRendering() {
+const RouteComponent = Component.makeUntraced(function* AsyncRendering() {
     const MemoizedAsyncComponentFC = yield* MemoizedAsyncComponent
     const AsyncComponentFC = yield* AsyncComponent
     const [input, setInput] = React.useState("")
@@ -50,7 +51,7 @@ const RouteComponent = Component.make(function* AsyncRendering() {
 // )
 
 
-class AsyncComponent extends Component.make(function* AsyncComponent() {
+class AsyncComponent extends Component.makeUntraced(function* AsyncComponent() {
     const SubComponentFC = yield* SubComponent
 
     yield* Effect.sleep("500 millis") // Async operation
@@ -66,10 +67,10 @@ class AsyncComponent extends Component.make(function* AsyncComponent() {
     Suspense.suspense,
     Suspense.withOptions({ defaultFallback: <p>Loading...</p> }),
 ) {}
-class MemoizedAsyncComponent extends Memoized.memo(AsyncComponent) {}
+class MemoizedAsyncComponent extends Memo.memo(AsyncComponent) {}
 
-class SubComponent extends Component.make(function* SubComponent() {
-    const [state] = React.useState(yield* Hook.useOnce(() => Effect.provide(makeUuid4, GetRandomValues.CryptoRandom)))
+class SubComponent extends Component.makeUntraced(function* SubComponent() {
+    const [state] = React.useState(yield* Hooks.useOnce(() => Effect.provide(makeUuid4, GetRandomValues.CryptoRandom)))
     return <Text>{state}</Text>
 }) {}
 

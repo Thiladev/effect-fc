@@ -1,4 +1,4 @@
-import { ThSchema } from "@thilawyn/thilaschema"
+import { assertEncodedJsonifiable } from "@/lib/schema"
 import { Schema } from "effect"
 
 
@@ -14,7 +14,7 @@ export const TodoFromJsonStruct = Schema.Struct({
     ...Todo.fields,
     completedAt: Schema.Option(Schema.DateTimeUtc),
 }).pipe(
-    ThSchema.assertEncodedJsonifiable
+    assertEncodedJsonifiable
 )
 
 export const TodoFromJson = Schema.compose(TodoFromJsonStruct, Todo)

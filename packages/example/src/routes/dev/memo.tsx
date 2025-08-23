@@ -3,11 +3,11 @@ import { Flex, Text, TextField } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
 import { GetRandomValues, makeUuid4 } from "@typed/id"
 import { Effect } from "effect"
-import { Component, Memoized } from "effect-fc"
+import { Component, Memo } from "effect-fc"
 import * as React from "react"
 
 
-const RouteComponent = Component.make(function* RouteComponent() {
+const RouteComponent = Component.makeUntraced(function* RouteComponent() {
     const [value, setValue] = React.useState("")
 
     return (
@@ -25,12 +25,12 @@ const RouteComponent = Component.make(function* RouteComponent() {
     Component.withRuntime(runtime.context)
 )
 
-class SubComponent extends Component.make(function* SubComponent() {
+class SubComponent extends Component.makeUntraced(function* SubComponent() {
     const id = yield* makeUuid4.pipe(Effect.provide(GetRandomValues.CryptoRandom))
     return <Text>{id}</Text>
 }) {}
 
-class MemoizedSubComponent extends Memoized.memo(SubComponent) {}
+class MemoizedSubComponent extends Memo.memo(SubComponent) {}
 
 export const Route = createFileRoute("/dev/memo")({
     component: RouteComponent,

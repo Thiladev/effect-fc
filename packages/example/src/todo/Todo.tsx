@@ -1,13 +1,20 @@
 import * as Domain from "@/domain"
-import { Box, Button, Flex, IconButton, TextArea } from "@radix-ui/themes"
+import { TextAreaInput } from "@/lib/input/TextAreaInput"
+import { TextFieldInput } from "@/lib/input/TextFieldInput"
+import { DateTimeUtcFromZonedInput } from "@/lib/schema"
+import { Box, Button, Flex, IconButton } from "@radix-ui/themes"
 import { GetRandomValues, makeUuid4 } from "@typed/id"
-import { Chunk, Effect, Match, Option, Ref, Runtime, SubscriptionRef } from "effect"
-import { Component, Hook, Memoized } from "effect-fc"
-import { SubscriptionSubRef } from "effect-fc/types"
+import { Chunk, DateTime, Effect, Match, Option, Ref, Runtime, Schema, Stream, SubscriptionRef } from "effect"
+import { Component, Memo } from "effect-fc"
+import { useMemo, useOnce, useSubscribe } from "effect-fc/hooks"
+import { Subscribable, SubscriptionSubRef } from "effect-fc/types"
 import { FaArrowDown, FaArrowUp } from "react-icons/fa"
 import { FaDeleteLeft } from "react-icons/fa6"
 import { TodosState } from "./TodosState.service"
 
+
+const StringTextAreaInput = TextAreaInput({ schema: Schema.String })
+const OptionalDateTimeInput = TextFieldInput({ optional: true, schema: DateTimeUtcFromZonedInput })
 
 const makeTodo = makeUuid4.pipe(
     Effect.map(id => Domain.Todo.Todo.make({
@@ -20,96 +27,86 @@ const makeTodo = makeUuid4.pipe(
 
 
 export type TodoProps = (
-    | { readonly _tag: "new", readonly index?: never }
-    | { readonly _tag: "edit", readonly index: number }
+    | { readonly _tag: "new" }
+    | { readonly _tag: "edit", readonly id: string }
 )
 
-export class Todo extends Component.make(function* Todo(props: TodoProps) {
+export class Todo extends Component.makeUntraced(function* Todo(props: TodoProps) {
     const runtime = yield* Effect.runtime()
     const state = yield* TodosState
 
-    const [ref, contentRef] = yield* Hook.useMemo(() => Match.value(props).pipe(
-        Match.tag("new", () => Effect.andThen(makeTodo, SubscriptionRef.make)),
-        Match.tag("edit", ({ index }) => Effect.succeed(SubscriptionSubRef.makeFromChunkRef(state.ref, index))),
+    const { ref, indexRef, contentRef, completedAtRef } = yield* useMemo(() => Match.value(props).pipe(
+        Match.tag("new", () => Effect.Do.pipe(
+            Effect.bind("ref", () => Effect.andThen(makeTodo, SubscriptionRef.make)),
+            Effect.let("indexRef", () => Subscribable.make({ get: Effect.succeed(-1), changes: Stream.empty })),
+        )),
+        Match.tag("edit", ({ id }) => Effect.Do.pipe(
+            Effect.let("ref", () => state.getElementRef(id)),
+            Effect.let("indexRef", () => state.getIndexSubscribable(id)),
+        )),
         Match.exhaustive,
 
-        Effect.map(ref => [
-            ref,
-            SubscriptionSubRef.makeFromPath(ref, ["content"]),
-        ] as const),
-    ), [props._tag, props.index])
+        Effect.let("contentRef", ({ ref }) => SubscriptionSubRef.makeFromPath(ref, ["content"])),
+        Effect.let("completedAtRef", ({ ref }) => SubscriptionSubRef.makeFromPath(ref, ["completedAt"])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    ), [props._tag, props._tag === "edit" ? props.id : undefined])
 
-    const [content, size] = yield* Hook.useSubscribeRefs(contentRef, state.sizeRef)
+    const [index, size] = yield* useSubscribe(indexRef, state.sizeSubscribable)
+
+    const StringTextAreaInputFC = yield* StringTextAreaInput
+    const OptionalDateTimeInputFC = yield* OptionalDateTimeInput
+
 
     return (
-        <Flex direction="column" align="stretch" gap="2">
-            <Flex direction="row" align="center" gap="2">
-                <Box flexGrow="1">
-                    <TextArea
-                        value={content}
-                        onChange={e => Runtime.runSync(runtime)(Ref.set(contentRef, e.target.value))}
-                    />
-                </Box>
+        <Flex direction="row" align="center" gap="2">
+            <Box flexGrow="1">
+                <Flex direction="column" align="stretch" gap="2">
+                    <StringTextAreaInputFC ref={contentRef} />
 
-                {props._tag === "edit" &&
-                    <Flex direction="column" justify="center" align="center" gap="1">
-                        <IconButton
-                            disabled={props.index <= 0}
-                            onClick={() => Runtime.runSync(runtime)(
-                                SubscriptionRef.updateEffect(state.ref, todos => Effect.gen(function*() {
-                                    if (props.index <= 0) return yield* Option.none()
-                                    return todos.pipe(
-                                        Chunk.replace(props.index, yield* Chunk.get(todos, props.index - 1)),
-                                        Chunk.replace(props.index - 1, yield* ref),
-                                    )
-                                }))
-                            )}
-                        >
-                            <FaArrowUp />
-                        </IconButton>
+                    <Flex direction="row" justify="center" align="center" gap="2">
+                        <OptionalDateTimeInputFC
+                            type="datetime-local"
+                            ref={completedAtRef}
+                            defaultValue={yield* useOnce(() => DateTime.now)}
+                        />
 
-                        <IconButton
-                            disabled={props.index >= size - 1}
-                            onClick={() => Runtime.runSync(runtime)(
-                                SubscriptionRef.updateEffect(state.ref, todos => Effect.gen(function*() {
-                                    if (props.index >= size - 1) return yield* Option.none()
-                                    return todos.pipe(
-                                        Chunk.replace(props.index, yield* Chunk.get(todos, props.index + 1)),
-                                        Chunk.replace(props.index + 1, yield* ref),
-                                    )
-                                }))
-                            )}
-                        >
-                            <FaArrowDown />
-                        </IconButton>
-
-                        <IconButton
-                            onClick={() => Runtime.runSync(runtime)(
-                                Ref.update(state.ref, Chunk.remove(props.index))
-                            )}
-                        >
-                            <FaDeleteLeft />
-                        </IconButton>
+                        {props._tag === "new" &&
+                            <Button
+                                onClick={() => ref.pipe(
+                                    Effect.andThen(todo => Ref.update(state.ref, Chunk.prepend(todo))),
+                                    Effect.andThen(makeTodo),
+                                    Effect.andThen(todo => Ref.set(ref, todo)),
+                                    Runtime.runSync(runtime),
+                                )}
+                            >
+                                Add
+                            </Button>
+                        }
                     </Flex>
-                }
-            </Flex>
+                </Flex>
+            </Box>
 
-            {props._tag === "new" &&
-                <Flex direction="row" justify="center">
-                    <Button
-                        onClick={() => ref.pipe(
-                            Effect.andThen(todo => Ref.update(state.ref, Chunk.prepend(todo))),
-                            Effect.andThen(makeTodo),
-                            Effect.andThen(todo => Ref.set(ref, todo)),
-                            Runtime.runSync(runtime),
-                        )}
+            {props._tag === "edit" &&
+                <Flex direction="column" justify="center" align="center" gap="1">
+                    <IconButton
+                        disabled={index <= 0}
+                        onClick={() => Runtime.runSync(runtime)(state.moveLeft(props.id))}
                     >
-                        Add
-                    </Button>
+                        <FaArrowUp />
+                    </IconButton>
+
+                    <IconButton
+                        disabled={index >= size - 1}
+                        onClick={() => Runtime.runSync(runtime)(state.moveRight(props.id))}
+                    >
+                        <FaArrowDown />
+                    </IconButton>
+
+                    <IconButton onClick={() => Runtime.runSync(runtime)(state.remove(props.id))}>
+                        <FaDeleteLeft />
+                    </IconButton>
                 </Flex>
             }
         </Flex>
     )
-}).pipe(
-    Memoized.memo
-) {}
+}).pipe(Memo.memo) {}

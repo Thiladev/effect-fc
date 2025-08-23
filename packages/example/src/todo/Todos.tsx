@@ -1,15 +1,16 @@
 import { Container, Flex, Heading } from "@radix-ui/themes"
 import { Chunk, Console, Effect } from "effect"
-import { Component, Hook } from "effect-fc"
+import { Component } from "effect-fc"
+import { useOnce, useSubscribe } from "effect-fc/hooks"
 import { Todo } from "./Todo"
 import { TodosState } from "./TodosState.service"
 
 
-export class Todos extends Component.make(function* Todos() {
+export class Todos extends Component.makeUntraced(function* Todos() {
     const state = yield* TodosState
-    const [todos] = yield* Hook.useSubscribeRefs(state.ref)
+    const [todos] = yield* useSubscribe(state.ref)
 
-    yield* Hook.useOnce(() => Effect.andThen(
+    yield* useOnce(() => Effect.andThen(
         Console.log("Todos mounted"),
         Effect.addFinalizer(() => Console.log("Todos unmounted")),
     ))
@@ -23,8 +24,8 @@ export class Todos extends Component.make(function* Todos() {
             <Flex direction="column" align="stretch" gap="2" mt="2">
                 <TodoFC _tag="new" />
 
-                {Chunk.map(todos, (v, k) =>
-                    <TodoFC key={v.id} _tag="edit" index={k} />
+                {Chunk.map(todos, todo =>
+                    <TodoFC key={todo.id} _tag="edit" id={todo.id} />
                 )}
             </Flex>
         </Container>

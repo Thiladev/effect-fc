@@ -1,5 +1,4 @@
 export * as Component from "./Component.js"
-export * as Hook from "./Hook.js"
-export * as Memoized from "./Memoized.js"
-export * as ReactManagedRuntime from "./ReactManagedRuntime.js"
+export * as Memo from "./Memo.js"
+export * as ReactRuntime from "./ReactRuntime.js"
 export * as Suspense from "./Suspense.js"
