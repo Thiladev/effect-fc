@@ -14,6 +14,7 @@ declare module "@tanstack/react-router" {
     }
 }
 
+// biome-ignore lint/style/noNonNullAssertion: React entrypoint
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
         <ReactRuntime.Provider runtime={runtime}>

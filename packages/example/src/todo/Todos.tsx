@@ -1,16 +1,15 @@
 import { Container, Flex, Heading } from "@radix-ui/themes"
 import { Chunk, Console, Effect } from "effect"
-import { Component } from "effect-fc"
-import { useOnce, useSubscribe } from "effect-fc/hooks"
+import { Component, Hooks } from "effect-fc"
 import { Todo } from "./Todo"
 import { TodosState } from "./TodosState.service"
 
 
-export class Todos extends Component.makeUntraced(function* Todos() {
+export class Todos extends Component.makeUntraced("Todos")(function*() {
     const state = yield* TodosState
-    const [todos] = yield* useSubscribe(state.ref)
+    const [todos] = yield* Hooks.useSubscribables(state.ref)
 
-    yield* useOnce(() => Effect.andThen(
+    yield* Hooks.useOnce(() => Effect.andThen(
         Console.log("Todos mounted"),
         Effect.addFinalizer(() => Console.log("Todos unmounted")),
     ))

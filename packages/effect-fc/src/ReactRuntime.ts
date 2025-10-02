@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
 import { Effect, type Layer, ManagedRuntime, Predicate, type Runtime } from "effect"
 import * as React from "react"
 
@@ -6,7 +7,7 @@ export const TypeId: unique symbol = Symbol.for("effect-fc/ReactRuntime")
 export type TypeId = typeof TypeId
 
 export interface ReactRuntime<R, ER> {
-    new(_: never): {}
+    new(_: never): Record<string, never>
     readonly [TypeId]: TypeId
     readonly runtime: ManagedRuntime.ManagedRuntime<R, ER>
     readonly context: React.Context<Runtime.Runtime<R>>
@@ -23,6 +24,7 @@ export const make = <R, ER>(
 ): ReactRuntime<R, ER> => Object.setPrototypeOf(
     Object.assign(function() {}, {
         runtime: ManagedRuntime.make(layer, memoMap),
+        // biome-ignore lint/style/noNonNullAssertion: context initialization
         context: React.createContext<Runtime.Runtime<R>>(null!),
     }),
     ReactRuntimeProto,
@@ -48,16 +50,14 @@ export const Provider = <R, ER>(
     )
 }
 
-namespace ProviderInner {
-    export interface Props<R, ER> {
-        readonly runtime: ReactRuntime<R, ER>
-        readonly promise: Promise<Runtime.Runtime<R>>
-        readonly children?: React.ReactNode
-    }
+interface ProviderInnerProps<R, ER> {
+    readonly runtime: ReactRuntime<R, ER>
+    readonly promise: Promise<Runtime.Runtime<R>>
+    readonly children?: React.ReactNode
 }
 
 const ProviderInner = <R, ER>(
-    { runtime, promise, children }: ProviderInner.Props<R, ER>
+    { runtime, promise, children }: ProviderInnerProps<R, ER>
 ): React.ReactNode => React.createElement(
     runtime.context,
     { value: React.use(promise) },

@@ -1,17 +1,18 @@
+import { createFileRoute } from "@tanstack/react-router"
+import { Effect } from "effect"
+import { Component, Hooks } from "effect-fc"
 import { runtime } from "@/runtime"
 import { Todos } from "@/todo/Todos"
 import { TodosState } from "@/todo/TodosState.service"
-import { createFileRoute } from "@tanstack/react-router"
-import { Effect } from "effect"
-import { Component } from "effect-fc"
-import { useContext } from "effect-fc/hooks"
 
 
 const TodosStateLive = TodosState.Default("todos")
 
-const Index = Component.makeUntraced(function* Index() {
-    const context = yield* useContext(TodosStateLive, { finalizerExecutionMode: "fork" })
-    const TodosFC = yield* Effect.provide(Todos, context)
+const Index = Component.makeUntraced("Index")(function*() {
+    const TodosFC = yield* Effect.provide(
+        Todos,
+        yield* Hooks.useContext(TodosStateLive, { finalizerExecutionMode: "fork" }),
+    )
 
     return <TodosFC />
 }).pipe(

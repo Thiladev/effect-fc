@@ -1,7 +1,8 @@
+/** biome-ignore-all lint/correctness/useHookAtTopLevel: effect-fc HOC */
 import { Callout, Checkbox, Flex, TextField } from "@radix-ui/themes"
-import { Array, Equivalence, Option, ParseResult, Schema, Struct } from "effect"
-import { Component, Memo } from "effect-fc"
-import { useInput, useOptionalInput } from "effect-fc/hooks"
+import { Array, type Equivalence, Option, ParseResult, type Schema, Struct } from "effect"
+import { Component } from "effect-fc"
+import { useInput, useOptionalInput } from "effect-fc/Hooks"
 import * as React from "react"
 
 
@@ -18,7 +19,7 @@ export const TextFieldInput = <A, R, O extends boolean = false>(options: {
     readonly optional?: O
     readonly schema: Schema.Schema<A, string, R>
     readonly equivalence?: Equivalence.Equivalence<A>
-}) => Component.makeUntraced(function* TextFieldInput(props: O extends true
+}) => Component.makeUntraced("TextFieldInput")(function*(props: O extends true
     ? TextFieldOptionalInputProps<A, R>
     : TextFieldInputProps<A, R>
 ) {
@@ -28,12 +29,10 @@ export const TextFieldInput = <A, R, O extends boolean = false>(options: {
     ) = options.optional
         ? {
             optional: true,
-            // eslint-disable-next-line react-hooks/rules-of-hooks
             ...yield* useOptionalInput({ ...options, ...props as TextFieldOptionalInputProps<A, R> }),
         }
         : {
             optional: false,
-            // eslint-disable-next-line react-hooks/rules-of-hooks
             ...yield* useInput({ ...options, ...props as TextFieldInputProps<A, R> }),
         }
 
@@ -67,4 +66,4 @@ export const TextFieldInput = <A, R, O extends boolean = false>(options: {
             }
         </Flex>
     )
-}).pipe(Memo.memo)
+})

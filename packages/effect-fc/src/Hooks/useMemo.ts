@@ -12,5 +12,6 @@ export const useMemo: {
     deps: React.DependencyList,
 ) {
     const runtime = yield* Effect.runtime()
+    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
     return yield* React.useMemo(() => Runtime.runSync(runtime)(Effect.cached(factory())), deps)
 })

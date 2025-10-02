@@ -1,7 +1,7 @@
 import { Effect, ExecutionStrategy, Ref, Runtime, Scope } from "effect"
 import * as React from "react"
-import type { ScopeOptions } from "./ScopeOptions.js"
 import { closeScope } from "./internal.js"
+import type { ScopeOptions } from "./ScopeOptions.js"
 
 
 export const useScope: {
@@ -12,6 +12,7 @@ export const useScope: {
 } = Effect.fnUntraced(function*(deps, options) {
     const runtime = yield* Effect.runtime()
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: no reactivity needed
     const [isInitialRun, initialScope] = React.useMemo(() => Runtime.runSync(runtime)(Effect.all([
         Ref.make(true),
         Scope.make(options?.finalizerExecutionStrategy ?? ExecutionStrategy.sequential),
@@ -30,6 +31,7 @@ export const useScope: {
                 Effect.map(scope => () => closeScope(scope, runtime, options)),
             ),
         })
+    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
     ), deps)
 
     return scope

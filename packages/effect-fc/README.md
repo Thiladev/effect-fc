@@ -16,14 +16,14 @@ Documentation is currently being written. In the meantime, you can take a look a
 ## What writing components looks like
 ```typescript
 import { Component } from "effect-fc"
-import { useOnce, useSubscribe } from "effect-fc/hooks"
+import { useOnce, useSubscribables } from "effect-fc/Hooks"
 import { Todo } from "./Todo"
 import { TodosState } from "./TodosState.service"
 
 
-export class Todos extends Component.makeUntraced(function* Todos() {
+export class Todos extends Component.makeUntraced("Todos")(function*() {
     const state = yield* TodosState
-    const [todos] = yield* useSubscribe(state.ref)
+    const [todos] = yield* useSubscribables(state.ref)
 
     yield* useOnce(() => Effect.andThen(
         Console.log("Todos mounted"),
@@ -49,7 +49,7 @@ export class Todos extends Component.makeUntraced(function* Todos() {
 
 const TodosStateLive = TodosState.Default("todos")
 
-const Index = Component.makeUntraced(function* Index() {
+const Index = Component.makeUntraced("Index")(function*() {
     const context = yield* useContext(TodosStateLive, { finalizerExecutionMode: "fork" })
     const TodosFC = yield* Effect.provide(Todos, context)
 

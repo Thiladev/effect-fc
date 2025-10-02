@@ -1,7 +1,7 @@
 import { Effect, ExecutionStrategy, Runtime, Scope } from "effect"
 import * as React from "react"
-import type { ScopeOptions } from "./ScopeOptions.js"
 import { closeScope } from "./internal.js"
+import type { ScopeOptions } from "./ScopeOptions.js"
 
 
 export const useEffect: {
@@ -24,5 +24,6 @@ export const useEffect: {
             () => closeScope(scope, runtime, options)
         ),
         Runtime.runSync(runtime),
+    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
     ), deps)
 })

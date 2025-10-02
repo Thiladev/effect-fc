@@ -1,11 +1,11 @@
 import { type Duration, Effect, Equal, Equivalence, flow, identity, Option, type ParseResult, Ref, Schema, Stream, SubscriptionRef } from "effect"
 import * as React from "react"
-import { SetStateAction } from "../../../types/index.js"
+import * as SetStateAction from "../../SetStateAction.js"
 import { useCallbackSync } from "../useCallbackSync.js"
 import { useFork } from "../useFork.js"
 import { useOnce } from "../useOnce.js"
 import { useRefState } from "../useRefState.js"
-import { useSubscribe } from "../useSubscribe.js"
+import { useSubscribables } from "../useSubscribables.js"
 
 
 export namespace useOptionalInput {
@@ -101,7 +101,7 @@ export const useOptionalInput: {
         [options.schema, options.ref, internalRef, enabledRef],
     )
 
-    const [enabled] = yield* useSubscribe(enabledRef)
+    const [enabled] = yield* useSubscribables(enabledRef)
     const [value, setValue] = yield* useRefState(internalRef)
     return { value, setValue, enabled, setEnabled, error }
 })

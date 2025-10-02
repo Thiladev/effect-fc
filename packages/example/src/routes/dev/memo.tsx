@@ -1,13 +1,13 @@
-import { runtime } from "@/runtime"
 import { Flex, Text, TextField } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
 import { GetRandomValues, makeUuid4 } from "@typed/id"
 import { Effect } from "effect"
-import { Component, Memo } from "effect-fc"
+import { Component, Memoized } from "effect-fc"
 import * as React from "react"
+import { runtime } from "@/runtime"
 
 
-const RouteComponent = Component.makeUntraced(function* RouteComponent() {
+const RouteComponent = Component.makeUntraced("RouteComponent")(function*() {
     const [value, setValue] = React.useState("")
 
     return (
@@ -25,12 +25,12 @@ const RouteComponent = Component.makeUntraced(function* RouteComponent() {
     Component.withRuntime(runtime.context)
 )
 
-class SubComponent extends Component.makeUntraced(function* SubComponent() {
+class SubComponent extends Component.makeUntraced("SubComponent")(function*() {
     const id = yield* makeUuid4.pipe(Effect.provide(GetRandomValues.CryptoRandom))
     return <Text>{id}</Text>
 }) {}
 
-class MemoizedSubComponent extends Memo.memo(SubComponent) {}
+class MemoizedSubComponent extends Memoized.memoized(SubComponent) {}
 
 export const Route = createFileRoute("/dev/memo")({
     component: RouteComponent,

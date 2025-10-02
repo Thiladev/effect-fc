@@ -1,16 +1,17 @@
+/** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
 import { Effect, Function, Predicate, Runtime, Scope } from "effect"
 import * as React from "react"
 import type * as Component from "./Component.js"
 
 
-export const TypeId: unique symbol = Symbol.for("effect-fc/Suspense")
+export const TypeId: unique symbol = Symbol.for("effect-fc/Async")
 export type TypeId = typeof TypeId
 
-export interface Suspense extends Suspense.Options {
+export interface Async extends Async.Options {
     readonly [TypeId]: TypeId
 }
 
-export namespace Suspense {
+export namespace Async {
     export interface Options {
         readonly defaultFallback?: React.ReactNode
     }
@@ -23,13 +24,13 @@ const SuspenseProto = Object.freeze({
     [TypeId]: TypeId,
 
     makeFunctionComponent<P extends {}, A extends React.ReactNode, E, R>(
-        this: Component.Component<P, A, E, R> & Suspense,
+        this: Component.Component<P, A, E, R> & Async,
         runtimeRef: React.RefObject<Runtime.Runtime<Exclude<R, Scope.Scope>>>,
         scope: Scope.Scope,
     ) {
         const SuspenseInner = (props: { readonly promise: Promise<React.ReactNode> }) => React.use(props.promise)
 
-        return ({ fallback, name, ...props }: Suspense.Props) => {
+        return ({ fallback, name, ...props }: Async.Props) => {
             const promise = Runtime.runPromise(runtimeRef.current)(
                 Effect.provideService(this.body(props as P), Scope.Scope, scope)
             )
@@ -44,19 +45,19 @@ const SuspenseProto = Object.freeze({
 } as const)
 
 
-export const isSuspense = (u: unknown): u is Suspense => Predicate.hasProperty(u, TypeId)
+export const isAsync = (u: unknown): u is Async => Predicate.hasProperty(u, TypeId)
 
-export const suspense = <T extends Component.Component<any, any, any, any>>(
+export const async = <T extends Component.Component<any, any, any, any>>(
     self: T
 ): (
     & Omit<T, keyof Component.Component.AsComponent<T>>
     & Component.Component<
-        Component.Component.Props<T> & Suspense.Props,
+        Component.Component.Props<T> & Async.Props,
         Component.Component.Success<T>,
         Component.Component.Error<T>,
         Component.Component.Context<T>
     >
-    & Suspense
+    & Async
 ) => Object.setPrototypeOf(
     Object.assign(function() {}, self),
     Object.freeze(Object.setPrototypeOf(
@@ -66,16 +67,16 @@ export const suspense = <T extends Component.Component<any, any, any, any>>(
 )
 
 export const withOptions: {
-    <T extends Component.Component<any, any, any, any> & Suspense>(
-        options: Partial<Suspense.Options>
+    <T extends Component.Component<any, any, any, any> & Async>(
+        options: Partial<Async.Options>
     ): (self: T) => T
-    <T extends Component.Component<any, any, any, any> & Suspense>(
+    <T extends Component.Component<any, any, any, any> & Async>(
         self: T,
-        options: Partial<Suspense.Options>,
+        options: Partial<Async.Options>,
     ): T
-} = Function.dual(2, <T extends Component.Component<any, any, any, any> & Suspense>(
+} = Function.dual(2, <T extends Component.Component<any, any, any, any> & Async>(
     self: T,
-    options: Partial<Suspense.Options>,
+    options: Partial<Async.Options>,
 ): T => Object.setPrototypeOf(
     Object.assign(function() {}, self, options),
     Object.getPrototypeOf(self),

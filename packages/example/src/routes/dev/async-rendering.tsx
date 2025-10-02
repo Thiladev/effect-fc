@@ -1,11 +1,10 @@
-import { runtime } from "@/runtime"
 import { Flex, Text, TextField } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
 import { GetRandomValues, makeUuid4 } from "@typed/id"
 import { Effect } from "effect"
-import { Component, Memo, Suspense } from "effect-fc"
-import { Hooks } from "effect-fc/hooks"
+import { Async, Component, Hooks, Memoized } from "effect-fc"
 import * as React from "react"
+import { runtime } from "@/runtime"
 
 
 // Generator version
@@ -51,7 +50,7 @@ const RouteComponent = Component.makeUntraced(function* AsyncRendering() {
 // )
 
 
-class AsyncComponent extends Component.makeUntraced(function* AsyncComponent() {
+class AsyncComponent extends Component.makeUntraced("AsyncComponent")(function*() {
     const SubComponentFC = yield* SubComponent
 
     yield* Effect.sleep("500 millis") // Async operation
@@ -64,12 +63,12 @@ class AsyncComponent extends Component.makeUntraced(function* AsyncComponent() {
         </Flex>
     )
 }).pipe(
-    Suspense.suspense,
-    Suspense.withOptions({ defaultFallback: <p>Loading...</p> }),
+    Async.async,
+    Async.withOptions({ defaultFallback: <p>Loading...</p> }),
 ) {}
-class MemoizedAsyncComponent extends Memo.memo(AsyncComponent) {}
+class MemoizedAsyncComponent extends Memoized.memoized(AsyncComponent) {}
 
-class SubComponent extends Component.makeUntraced(function* SubComponent() {
+class SubComponent extends Component.makeUntraced("SubComponent")(function*() {
     const [state] = React.useState(yield* Hooks.useOnce(() => Effect.provide(makeUuid4, GetRandomValues.CryptoRandom)))
     return <Text>{state}</Text>
 }) {}

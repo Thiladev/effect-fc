@@ -1,0 +1,411 @@
+import * as AsyncData from "@typed/async-data"
+import { Array, Cause, Chunk, type Duration, Effect, Equal, Exit, Fiber, flow, identity, Option, ParseResult, Pipeable, Predicate, pipe, Ref, Schema, type Scope, Stream, type Subscribable, SubscriptionRef } from "effect"
+import type { NoSuchElementException } from "effect/Cause"
+import * as React from "react"
+import * as Hooks from "./Hooks/index.js"
+import * as PropertyPath from "./PropertyPath.js"
+import * as SubscribableInternal from "./Subscribable.js"
+import * as SubscriptionSubRef from "./SubscriptionSubRef.js"
+
+
+export const FormTypeId: unique symbol = Symbol.for("effect-fc/Form")
+export type FormTypeId = typeof FormTypeId
+
+export interface Form<in out A, in out I = A, out R = never, in out SA = void, in out SE = A, out SR = never>
+extends Pipeable.Pipeable {
+    readonly [FormTypeId]: FormTypeId
+
+    readonly schema: Schema.Schema<A, I, R>
+    readonly submit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>
+    readonly debounce: Option.Option<Duration.DurationInput>
+
+    readonly valueRef: SubscriptionRef.SubscriptionRef<Option.Option<A>>
+    readonly encodedValueRef: SubscriptionRef.SubscriptionRef<I>
+    readonly errorRef: SubscriptionRef.SubscriptionRef<Option.Option<ParseResult.ParseError>>
+    readonly validationFiberRef: SubscriptionRef.SubscriptionRef<Option.Option<Fiber.Fiber<void, never>>>
+    readonly submitStateRef: SubscriptionRef.SubscriptionRef<AsyncData.AsyncData<SA, SE>>
+
+    readonly canSubmitSubscribable: Subscribable.Subscribable<boolean>
+}
+
+class FormImpl<in out A, in out I = A, out R = never, in out SA = void, in out SE = A, out SR = never>
+extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR> {
+    readonly [FormTypeId]: FormTypeId = FormTypeId
+
+    constructor(
+        readonly schema: Schema.Schema<A, I, R>,
+        readonly submit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>,
+        readonly debounce: Option.Option<Duration.DurationInput>,
+
+        readonly valueRef: SubscriptionRef.SubscriptionRef<Option.Option<A>>,
+        readonly encodedValueRef: SubscriptionRef.SubscriptionRef<I>,
+        readonly errorRef: SubscriptionRef.SubscriptionRef<Option.Option<ParseResult.ParseError>>,
+        readonly validationFiberRef: SubscriptionRef.SubscriptionRef<Option.Option<Fiber.Fiber<void, never>>>,
+        readonly submitStateRef: SubscriptionRef.SubscriptionRef<AsyncData.AsyncData<SA, SE>>,
+
+        readonly canSubmitSubscribable: Subscribable.Subscribable<boolean>,
+    ) {
+        super()
+    }
+}
+
+export const isForm = (u: unknown): u is Form<unknown, unknown, unknown, unknown, unknown, unknown> => Predicate.hasProperty(u, FormTypeId)
+
+export namespace make {
+    export interface Options<in out A, in out I, out R, in out SA = void, in out SE = A, out SR = never> {
+        readonly schema: Schema.Schema<A, I, R>
+        readonly initialEncodedValue: NoInfer<I>
+        readonly submit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>,
+        readonly debounce?: Duration.DurationInput,
+    }
+}
+
+export const make: {
+    <A, I = A, R = never, SA = void, SE = A, SR = never>(
+        options: make.Options<A, I, R, SA, SE, SR>
+    ): Effect.Effect<Form<A, I, R, SA, SE, SR>>
+} = Effect.fnUntraced(function* <A, I = A, R = never, SA = void, SE = A, SR = never>(
+    options: make.Options<A, I, R, SA, SE, SR>
+) {
+    const valueRef = yield* SubscriptionRef.make(Option.none<A>())
+    const errorRef = yield* SubscriptionRef.make(Option.none<ParseResult.ParseError>())
+    const validationFiberRef = yield* SubscriptionRef.make(Option.none<Fiber.Fiber<void, never>>())
+    const submitStateRef = yield* SubscriptionRef.make(AsyncData.noData<SA, SE>())
+
+    return new FormImpl(
+        options.schema,
+        options.submit,
+        Option.fromNullable(options.debounce),
+
+        valueRef,
+        yield* SubscriptionRef.make(options.initialEncodedValue),
+        errorRef,
+        validationFiberRef,
+        submitStateRef,
+
+        pipe(
+            <A>([value, error, validationFiber, submitState]: readonly [
+                Option.Option<A>,
+                Option.Option<ParseResult.ParseError>,
+                Option.Option<Fiber.Fiber<void, never>>,
+                AsyncData.AsyncData<SA, SE>,
+            ]) => Option.isSome(value) && Option.isNone(error) && Option.isNone(validationFiber) && !AsyncData.isLoading(submitState),
+
+            filter => SubscribableInternal.make({
+                get: Effect.map(Effect.all([valueRef, errorRef, validationFiberRef, submitStateRef]), filter),
+                get changes() {
+                    return Stream.map(
+                        Stream.zipLatestAll(
+                            valueRef.changes,
+                            errorRef.changes,
+                            validationFiberRef.changes,
+                            submitStateRef.changes,
+                        ),
+                        filter,
+                    )
+                },
+            }),
+        ),
+    )
+})
+
+export const run = <A, I, R, SA, SE, SR>(
+    self: Form<A, I, R, SA, SE, SR>
+): Effect.Effect<void, never, Scope.Scope | R> => Stream.runForEach(
+    self.encodedValueRef.changes.pipe(
+        Option.isSome(self.debounce) ? Stream.debounce(self.debounce.value) : identity
+    ),
+
+    encodedValue => self.validationFiberRef.pipe(
+        Effect.andThen(Option.match({
+            onSome: Fiber.interrupt,
+            onNone: () => Effect.void,
+        })),
+        Effect.andThen(
+            Effect.addFinalizer(() => SubscriptionRef.set(self.validationFiberRef, Option.none())).pipe(
+                Effect.andThen(Schema.decode(self.schema, { errors: "all" })(encodedValue)),
+                Effect.exit,
+                Effect.andThen(flow(
+                    Exit.matchEffect({
+                        onSuccess: v => Effect.andThen(
+                            SubscriptionRef.set(self.valueRef, Option.some(v)),
+                            SubscriptionRef.set(self.errorRef, Option.none()),
+                        ),
+                        onFailure: c => Option.match(
+                            Chunk.findFirst(Cause.failures(c), e => e._tag === "ParseError"),
+                            {
+                                onSome: e => SubscriptionRef.set(self.errorRef, Option.some(e)),
+                                onNone: () => Effect.void,
+                            },
+                        ),
+                    }),
+                    Effect.uninterruptible,
+                )),
+                Effect.scoped,
+                Effect.forkScoped,
+            )
+        ),
+        Effect.andThen(fiber => SubscriptionRef.set(self.validationFiberRef, Option.some(fiber)))
+    ),
+)
+
+export const submit = <A, I, R, SA, SE, SR>(
+    self: Form<A, I, R, SA, SE, SR>
+): Effect.Effect<Option.Option<AsyncData.AsyncData<SA, SE>>, NoSuchElementException, SR> => Effect.whenEffect(
+    self.valueRef.pipe(
+        Effect.andThen(identity),
+        Effect.tap(Ref.set(self.submitStateRef, AsyncData.loading())),
+        Effect.andThen(flow(
+            self.submit,
+            Effect.exit,
+            Effect.map(Exit.match({
+                onSuccess: a => AsyncData.success(a),
+                onFailure: e => AsyncData.failure(e),
+            })),
+            Effect.tap(v => Ref.set(self.submitStateRef, v))
+        )),
+    ),
+
+    self.canSubmitSubscribable.get,
+)
+
+export namespace service {
+    export interface Options<in out A, in out I, out R, in out SA = void, in out SE = A, out SR = never>
+    extends make.Options<A, I, R, SA, SE, SR> {}
+}
+
+export const service = <A, I = A, R = never, SA = void, SE = A, SR = never>(
+    options: service.Options<A, I, R, SA, SE, SR>
+): Effect.Effect<Form<A, I, R, SA, SE, SR>, never, R | Scope.Scope> => Effect.tap(
+    make(options),
+    form => Effect.forkScoped(run(form)),
+)
+
+export const field = <A, I, R, SA, SE, SR, const P extends PropertyPath.Paths<NoInfer<I>>>(
+    self: Form<A, I, R, SA, SE, SR>,
+    path: P,
+): FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>> => new FormFieldImpl(
+    pipe(
+        Option.match({
+            onSome: (v: A) => Option.map(PropertyPath.get(v, path), Option.some),
+            onNone: () => Option.some(Option.none()),
+        }),
+        filter => SubscribableInternal.make({
+            get: Effect.flatMap(self.valueRef, filter),
+            get changes() { return Stream.flatMap(self.valueRef.changes, filter) },
+        }),
+    ),
+
+    SubscriptionSubRef.makeFromPath(self.encodedValueRef, path),
+
+    pipe(
+        Option.match({
+            onSome: (v: ParseResult.ParseError) => Effect.andThen(
+                ParseResult.ArrayFormatter.formatError(v),
+                Array.filter(issue => PropertyPath.equivalence(issue.path, path)),
+            ),
+            onNone: () => Effect.succeed([]),
+        }),
+        filter => SubscribableInternal.make({
+            get: Effect.flatMap(self.errorRef.get, filter),
+            get changes() { return Stream.flatMap(self.errorRef.changes, filter) },
+        }),
+    ),
+
+    pipe(
+        Option.isSome,
+        filter => SubscribableInternal.make({
+            get: Effect.map(self.validationFiberRef.get, filter),
+            get changes() { return Stream.map(self.validationFiberRef.changes, filter) },
+        }),
+    ),
+
+    pipe(
+        AsyncData.isLoading,
+        filter => SubscribableInternal.make({
+            get: Effect.map(self.submitStateRef, filter),
+            get changes() { return Stream.map(self.submitStateRef.changes, filter) },
+        }),
+    ),
+)
+
+
+export const FormFieldTypeId: unique symbol = Symbol.for("effect-fc/FormField")
+export type FormFieldTypeId = typeof FormFieldTypeId
+
+export interface FormField<in out A, in out I = A>
+extends Pipeable.Pipeable {
+    readonly [FormFieldTypeId]: FormFieldTypeId
+
+    readonly valueSubscribable: Subscribable.Subscribable<Option.Option<A>, NoSuchElementException>
+    readonly encodedValueRef: SubscriptionRef.SubscriptionRef<I>
+    readonly issuesSubscribable: Subscribable.Subscribable<readonly ParseResult.ArrayFormatterIssue[]>
+    readonly isValidatingSubscribable: Subscribable.Subscribable<boolean>
+    readonly isSubmittingSubscribable: Subscribable.Subscribable<boolean>
+}
+
+class FormFieldImpl<in out A, in out I = A>
+extends Pipeable.Class() implements FormField<A, I> {
+    readonly [FormFieldTypeId]: FormFieldTypeId = FormFieldTypeId
+
+    constructor(
+        readonly valueSubscribable: Subscribable.Subscribable<Option.Option<A>, NoSuchElementException>,
+        readonly encodedValueRef: SubscriptionRef.SubscriptionRef<I>,
+        readonly issuesSubscribable: Subscribable.Subscribable<readonly ParseResult.ArrayFormatterIssue[]>,
+        readonly isValidatingSubscribable: Subscribable.Subscribable<boolean>,
+        readonly isSubmittingSubscribable: Subscribable.Subscribable<boolean>,
+    ) {
+        super()
+    }
+}
+
+export const isFormField = (u: unknown): u is FormField<unknown, unknown> => Predicate.hasProperty(u, FormFieldTypeId)
+
+export namespace useForm {
+    export interface Options<in out A, in out I, out R, in out SA = void, in out SE = A, out SR = never>
+    extends make.Options<A, I, R, SA, SE, SR> {}
+}
+
+export const useForm: {
+    <A, I = A, R = never, SA = void, SE = A, SR = never>(
+        options: make.Options<A, I, R, SA, SE, SR>,
+        deps: React.DependencyList,
+    ): Effect.Effect<Form<A, I, R, SA, SE, SR>, never, R>
+} = Effect.fnUntraced(function* <A, I = A, R = never, SA = void, SE = A, SR = never>(
+    options: make.Options<A, I, R, SA, SE, SR>,
+    deps: React.DependencyList,
+) {
+    const form = yield* Hooks.useMemo(() => make(options), [options.debounce, ...deps])
+    yield* Hooks.useFork(() => run(form), [form])
+    return form
+})
+
+export const useSubmit = <A, I, R, SA, SE, SR>(
+    self: Form<A, I, R, SA, SE, SR>
+): Effect.Effect<
+    () => Promise<Option.Option<AsyncData.AsyncData<SA, SE>>>,
+    never,
+    SR
+> => Hooks.useCallbackPromise(() => submit(self), [self])
+
+export const useField = <A, I, R, SA, SE, SR, const P extends PropertyPath.Paths<NoInfer<I>>>(
+    self: Form<A, I, R, SA, SE, SR>,
+    path: P,
+): FormField<
+    PropertyPath.ValueFromPath<A, P>,
+    PropertyPath.ValueFromPath<I, P>
+// biome-ignore lint/correctness/useExhaustiveDependencies: individual path components need to be compared
+> => React.useMemo(() => field(self, path), [self, ...path])
+
+export namespace useInput {
+    export interface Options {
+        readonly debounce?: Duration.DurationInput
+    }
+
+    export interface Result<T> {
+        readonly value: T
+        readonly setValue: React.Dispatch<React.SetStateAction<T>>
+    }
+}
+
+export const useInput: {
+    <A, I>(
+        field: FormField<A, I>,
+        options?: useInput.Options,
+    ): Effect.Effect<useInput.Result<I>, NoSuchElementException>
+} = Effect.fnUntraced(function* <A, I>(
+    field: FormField<A, I>,
+    options?: useInput.Options,
+) {
+    const internalValueRef = yield* Hooks.useMemo(() => Effect.andThen(field.encodedValueRef, SubscriptionRef.make), [field])
+    const [value, setValue] = yield* Hooks.useRefState(internalValueRef)
+
+    yield* Hooks.useFork(() => Effect.all([
+        Stream.runForEach(
+            Stream.drop(field.encodedValueRef, 1),
+            upstreamEncodedValue => Effect.whenEffect(
+                Ref.set(internalValueRef, upstreamEncodedValue),
+                Effect.andThen(internalValueRef, internalValue => !Equal.equals(upstreamEncodedValue, internalValue)),
+            ),
+        ),
+
+        Stream.runForEach(
+            internalValueRef.changes.pipe(
+                Stream.drop(1),
+                Stream.changesWith(Equal.equivalence()),
+                options?.debounce ? Stream.debounce(options.debounce) : identity,
+            ),
+            internalValue => Ref.set(field.encodedValueRef, internalValue),
+        ),
+    ], { concurrency: "unbounded" }), [field, internalValueRef, options?.debounce])
+
+    return { value, setValue }
+})
+
+export namespace useOptionalInput {
+    export interface Options<T> extends useInput.Options {
+        readonly defaultValue: T
+    }
+
+    export interface Result<T> extends useInput.Result<T> {
+        readonly enabled: boolean
+        readonly setEnabled: React.Dispatch<React.SetStateAction<boolean>>
+    }
+}
+
+export const useOptionalInput: {
+    <A, I>(
+        field: FormField<A, Option.Option<I>>,
+        options: useOptionalInput.Options<I>,
+    ): Effect.Effect<useOptionalInput.Result<I>, NoSuchElementException>
+} = Effect.fnUntraced(function* <A, I>(
+    field: FormField<A, Option.Option<I>>,
+    options: useOptionalInput.Options<I>,
+) {
+    const [enabledRef, internalValueRef] = yield* Hooks.useMemo(() => Effect.andThen(
+        field.encodedValueRef,
+        Option.match({
+            onSome: v => Effect.all([SubscriptionRef.make(true), SubscriptionRef.make(v)]),
+            onNone: () => Effect.all([SubscriptionRef.make(false), SubscriptionRef.make(options.defaultValue)]),
+        }),
+    ), [field])
+
+    const [enabled, setEnabled] = yield* Hooks.useRefState(enabledRef)
+    const [value, setValue] = yield* Hooks.useRefState(internalValueRef)
+
+    yield* Hooks.useFork(() => Effect.all([
+        Stream.runForEach(
+            Stream.drop(field.encodedValueRef, 1),
+
+            upstreamEncodedValue => Effect.whenEffect(
+                Option.match(upstreamEncodedValue, {
+                    onSome: v => Effect.andThen(
+                        Ref.set(enabledRef, true),
+                        Ref.set(internalValueRef, v),
+                    ),
+                    onNone: () => Effect.andThen(
+                        Ref.set(enabledRef, false),
+                        Ref.set(internalValueRef, options.defaultValue),
+                    ),
+                }),
+
+                Effect.andThen(
+                    Effect.all([enabledRef, internalValueRef]),
+                    ([enabled, internalValue]) => !Equal.equals(upstreamEncodedValue, enabled ? Option.some(internalValue) : Option.none()),
+                ),
+            ),
+        ),
+
+        Stream.runForEach(
+            enabledRef.changes.pipe(
+                Stream.zipLatest(internalValueRef.changes),
+                Stream.drop(1),
+                Stream.changesWith(Equal.equivalence()),
+                options?.debounce ? Stream.debounce(options.debounce) : identity,
+            ),
+            ([enabled, internalValue]) => Ref.set(field.encodedValueRef, enabled ? Option.some(internalValue) : Option.none()),
+        ),
+    ], { concurrency: "unbounded" }), [field, enabledRef, internalValueRef, options.debounce])
+
+    return { enabled, setEnabled, value, setValue }
+})

@@ -1,11 +1,30 @@
 {
   "$schema": "https://turbo.build/schema.json",
+
   "tasks": {
+    "lint:tsc": {
+      "cache": false
+    },
+    "lint:biome": {
+      "cache": false
+    },
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["./src/**"],
       "outputs": ["./dist/**"]
     },
-    "pack": {}
+    "pack": {
+      "dependsOn": ["^pack"],
+      "cache": false
+    },
+    "clean:cache": {
+      "cache": false
+    },
+    "clean:dist": {
+      "cache": false
+    },
+    "clean:modules": {
+      "cache": false
+    }
   }
 }

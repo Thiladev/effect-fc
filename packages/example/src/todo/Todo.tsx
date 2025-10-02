@@ -1,15 +1,13 @@
+import { Box, Button, Flex, IconButton } from "@radix-ui/themes"
+import { GetRandomValues, makeUuid4 } from "@typed/id"
+import { Chunk, DateTime, Effect, Match, Option, Ref, Runtime, Schema, Stream, SubscriptionRef } from "effect"
+import { Component, Hooks, Memoized, Subscribable, SubscriptionSubRef } from "effect-fc"
+import { FaArrowDown, FaArrowUp } from "react-icons/fa"
+import { FaDeleteLeft } from "react-icons/fa6"
 import * as Domain from "@/domain"
 import { TextAreaInput } from "@/lib/input/TextAreaInput"
 import { TextFieldInput } from "@/lib/input/TextFieldInput"
 import { DateTimeUtcFromZonedInput } from "@/lib/schema"
-import { Box, Button, Flex, IconButton } from "@radix-ui/themes"
-import { GetRandomValues, makeUuid4 } from "@typed/id"
-import { Chunk, DateTime, Effect, Match, Option, Ref, Runtime, Schema, Stream, SubscriptionRef } from "effect"
-import { Component, Memo } from "effect-fc"
-import { useMemo, useOnce, useSubscribe } from "effect-fc/hooks"
-import { Subscribable, SubscriptionSubRef } from "effect-fc/types"
-import { FaArrowDown, FaArrowUp } from "react-icons/fa"
-import { FaDeleteLeft } from "react-icons/fa6"
 import { TodosState } from "./TodosState.service"
 
 
@@ -31,11 +29,11 @@ export type TodoProps = (
     | { readonly _tag: "edit", readonly id: string }
 )
 
-export class Todo extends Component.makeUntraced(function* Todo(props: TodoProps) {
+export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoProps) {
     const runtime = yield* Effect.runtime()
     const state = yield* TodosState
 
-    const { ref, indexRef, contentRef, completedAtRef } = yield* useMemo(() => Match.value(props).pipe(
+    const { ref, indexRef, contentRef, completedAtRef } = yield* Hooks.useMemo(() => Match.value(props).pipe(
         Match.tag("new", () => Effect.Do.pipe(
             Effect.bind("ref", () => Effect.andThen(makeTodo, SubscriptionRef.make)),
             Effect.let("indexRef", () => Subscribable.make({ get: Effect.succeed(-1), changes: Stream.empty })),
@@ -48,10 +46,9 @@ export class Todo extends Component.makeUntraced(function* Todo(props: TodoProps
 
         Effect.let("contentRef", ({ ref }) => SubscriptionSubRef.makeFromPath(ref, ["content"])),
         Effect.let("completedAtRef", ({ ref }) => SubscriptionSubRef.makeFromPath(ref, ["completedAt"])),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     ), [props._tag, props._tag === "edit" ? props.id : undefined])
 
-    const [index, size] = yield* useSubscribe(indexRef, state.sizeSubscribable)
+    const [index, size] = yield* Hooks.useSubscribables(indexRef, state.sizeSubscribable)
 
     const StringTextAreaInputFC = yield* StringTextAreaInput
     const OptionalDateTimeInputFC = yield* OptionalDateTimeInput
@@ -67,7 +64,7 @@ export class Todo extends Component.makeUntraced(function* Todo(props: TodoProps
                         <OptionalDateTimeInputFC
                             type="datetime-local"
                             ref={completedAtRef}
-                            defaultValue={yield* useOnce(() => DateTime.now)}
+                            defaultValue={yield* Hooks.useOnce(() => DateTime.now)}
                         />
 
                         {props._tag === "new" &&
@@ -109,4 +106,6 @@ export class Todo extends Component.makeUntraced(function* Todo(props: TodoProps
             }
         </Flex>
     )
-}).pipe(Memo.memo) {}
+}).pipe(
+    Memoized.memoized
+) {}

@@ -1,8 +1,8 @@
-import { Todo } from "@/domain"
 import { KeyValueStore } from "@effect/platform"
 import { BrowserKeyValueStore } from "@effect/platform-browser"
 import { Chunk, Console, Effect, Option, Schema, Stream, SubscriptionRef } from "effect"
-import { Subscribable, SubscriptionSubRef } from "effect-fc/types"
+import { Subscribable, SubscriptionSubRef } from "effect-fc"
+import { Todo } from "@/domain"
 
 
 export class TodosState extends Effect.Service<TodosState>()("TodosState", {

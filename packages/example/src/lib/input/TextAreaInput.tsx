@@ -1,7 +1,8 @@
-import { Callout, Flex, TextArea, TextAreaProps } from "@radix-ui/themes"
-import { Array, Equivalence, Option, ParseResult, Schema, Struct } from "effect"
+/** biome-ignore-all lint/correctness/useHookAtTopLevel: effect-fc HOC */
+import { Callout, Flex, TextArea, type TextAreaProps } from "@radix-ui/themes"
+import { Array, type Equivalence, Option, ParseResult, type Schema, Struct } from "effect"
 import { Component } from "effect-fc"
-import { useInput } from "effect-fc/hooks"
+import { useInput } from "effect-fc/Hooks"
 import * as React from "react"
 
 
@@ -15,7 +16,7 @@ export const TextAreaInput = <A, R>(options: {
     React.JSX.Element,
     ParseResult.ParseError,
     R
-> => Component.makeUntraced(function* TextFieldInput(props) {
+> => Component.makeUntraced("TextFieldInput")(function*(props) {
     const input = yield* useInput({ ...options, ...props })
     const issue = React.useMemo(() => input.error.pipe(
         Option.map(ParseResult.ArrayFormatter.formatErrorSync),

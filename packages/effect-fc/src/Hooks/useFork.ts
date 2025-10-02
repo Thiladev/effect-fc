@@ -27,5 +27,6 @@ export const useFork: {
             ...options,
             finalizerExecutionMode: options?.finalizerExecutionMode ?? "fork",
         })
+    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
     }, deps)
 })

@@ -1,6 +1,6 @@
-import { Effect, Equivalence, Ref, Stream, SubscriptionRef } from "effect"
+import { Effect, Equivalence, Ref, Stream, type SubscriptionRef } from "effect"
 import * as React from "react"
-import { SetStateAction } from "../../types/index.js"
+import * as SetStateAction from "../SetStateAction.js"
 import { useCallbackSync } from "./useCallbackSync.js"
 import { useFork } from "./useFork.js"
 import { useOnce } from "./useOnce.js"

@@ -2,7 +2,7 @@ import { Chunk, Effect, Effectable, Option, Predicate, Readable, Ref, Stream, Su
 import * as PropertyPath from "./PropertyPath.js"
 
 
-export const SubscriptionSubRefTypeId: unique symbol = Symbol.for("effect-fc/types/SubscriptionSubRef")
+export const SubscriptionSubRefTypeId: unique symbol = Symbol.for("effect-fc/SubscriptionSubRef")
 export type SubscriptionSubRefTypeId = typeof SubscriptionSubRefTypeId
 
 export interface SubscriptionSubRef<in out A, in out B extends SubscriptionRef.SubscriptionRef<any>>
@@ -78,7 +78,7 @@ extends Effectable.Class<A> implements SubscriptionSubRef<A, B> {
         return Effect.Do.pipe(
             Effect.bind("b", (): Effect.Effect<Effect.Effect.Success<B>> => this.parent),
             Effect.bind("ca", ({ b }) => f(this.getter(b))),
-            Effect.tap(({ b, ca: [, a] }) => Ref.set(this.parent, this.setter(b, a))),
+            Effect.tap(({ b, ca: [, a] }) => SubscriptionRef.set(this.parent, this.setter(b, a))),
             Effect.map(({ ca: [c] }) => c),
         )
     }

@@ -16,6 +16,7 @@ export const useSubscribeStream: {
     initialValue?: A,
 ) {
     const [reactStateValue, setReactStateValue] = React.useState(
+        // biome-ignore lint/correctness/useExhaustiveDependencies: no reactivity needed
         React.useMemo(() => initialValue
             ? Option.some(initialValue)
             : Option.none(),

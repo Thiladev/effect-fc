@@ -4,7 +4,7 @@ import { useFork } from "./useFork.js"
 import { useOnce } from "./useOnce.js"
 
 
-export const useSubscribe: {
+export const useSubscribables: {
     <const T extends readonly Subscribable.Subscribable<any, any, any>[]>(
         ...elements: T
     ): Effect.Effect<

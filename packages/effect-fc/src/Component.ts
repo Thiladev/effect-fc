@@ -1,7 +1,9 @@
-import { Context, Effect, Effectable, ExecutionStrategy, Function, Predicate, Runtime, Scope, String, Tracer, type Types, type Utils } from "effect"
+/** biome-ignore-all lint/complexity/noBannedTypes: {} is the default type for React props */
+/** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
+import { Context, Effect, Effectable, ExecutionStrategy, Function, Predicate, Runtime, Scope, Tracer, type Types, type Utils } from "effect"
 import * as React from "react"
-import { Hooks } from "./hooks/index.js"
-import * as Memo from "./Memo.js"
+import * as Hooks from "./Hooks/index.js"
+import { Memoized } from "./index.js"
 
 
 export const TypeId: unique symbol = Symbol.for("effect-fc/Component")
@@ -12,12 +14,12 @@ extends
     Effect.Effect<(props: P) => A, never, Exclude<R, Scope.Scope>>,
     Component.Options
 {
-    new(_: never): {}
+    new(_: never): Record<string, never>
     readonly [TypeId]: TypeId
-    readonly ["~Props"]: P
-    readonly ["~Success"]: A
-    readonly ["~Error"]: E
-    readonly ["~Context"]: R
+    readonly "~Props": P
+    readonly "~Success": A
+    readonly "~Error": E
+    readonly "~Context": R
 
     /** @internal */
     readonly body: (props: P) => Effect.Effect<A, E, R>
@@ -53,6 +55,7 @@ const ComponentProto = Object.freeze({
         this: Component<P, A, E, R>
     ) {
         const self = this
+        // biome-ignore lint/style/noNonNullAssertion: context initialization
         const runtimeRef = React.useRef<Runtime.Runtime<Exclude<R, Scope.Scope>>>(null!)
         runtimeRef.current = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
 
@@ -67,7 +70,7 @@ const ComponentProto = Object.freeze({
             const FC = React.useMemo(() => {
                 const f: React.FC<P> = self.makeFunctionComponent(runtimeRef, scope)
                 f.displayName = self.displayName ?? "Anonymous"
-                return Memo.isMemo(self)
+                return Memoized.isMemoized(self)
                     ? React.memo(f, self.propsAreEqual)
                     : f
             }, [scope])
@@ -331,13 +334,9 @@ export const make: (
     ) => make.Gen & make.NonGen)
 ) = (spanNameOrBody: Function | string, ...pipeables: any[]): any => {
     if (typeof spanNameOrBody !== "string") {
-        const displayName = displayNameFromBody(spanNameOrBody)
         return Object.setPrototypeOf(
             Object.assign(function() {}, defaultOptions, {
-                body: displayName
-                    ? Effect.fn(displayName)(spanNameOrBody as any, ...pipeables as [])
-                    : Effect.fn(spanNameOrBody as any, ...pipeables),
-                displayName,
+                body: Effect.fn(spanNameOrBody as any, ...pipeables),
             }),
             ComponentProto,
         )
@@ -347,25 +346,33 @@ export const make: (
         return (body: any, ...pipeables: any[]) => Object.setPrototypeOf(
             Object.assign(function() {}, defaultOptions, {
                 body: Effect.fn(spanNameOrBody, spanOptions)(body, ...pipeables as []),
-                displayName: displayNameFromBody(body) ?? spanNameOrBody,
+                displayName: spanNameOrBody,
             }),
             ComponentProto,
         )
     }
 }
 
-export const makeUntraced: make.Gen & make.NonGen = (
-    body: Function,
-    ...pipeables: any[]
-) => Object.setPrototypeOf(
-    Object.assign(function() {}, defaultOptions, {
-        body: Effect.fnUntraced(body as any, ...pipeables as []),
-        displayName: displayNameFromBody(body),
-    }),
-    ComponentProto,
+export const makeUntraced: (
+    & make.Gen
+    & make.NonGen
+    & ((name: string) => make.Gen & make.NonGen)
+) = (spanNameOrBody: Function | string, ...pipeables: any[]): any => (
+    typeof spanNameOrBody !== "string"
+        ? Object.setPrototypeOf(
+            Object.assign(function() {}, defaultOptions, {
+                body: Effect.fnUntraced(spanNameOrBody as any, ...pipeables as []),
+            }),
+            ComponentProto,
+        )
+        : (body: any, ...pipeables: any[]) => Object.setPrototypeOf(
+            Object.assign(function() {}, defaultOptions, {
+                body: Effect.fnUntraced(body, ...pipeables as []),
+                displayName: spanNameOrBody,
+            }),
+            ComponentProto,
+        )
 )
-
-const displayNameFromBody = (body: Function) => !String.isEmpty(body.name) ? body.name : undefined
 
 export const withOptions: {
     <T extends Component<any, any, any, any>>(
