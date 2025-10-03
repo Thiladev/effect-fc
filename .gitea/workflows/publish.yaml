@@ -22,7 +22,7 @@ jobs:
       - name: Build
         run: bun run build
       - name: Publish effect-fc
-        uses: JS-DevTools/npm-publish@v3
+        uses: JS-DevTools/npm-publish@v4
         with:
           package: packages/effect-fc
           access: public
