@@ -17,6 +17,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.2.5",
     "@effect/language-service": "^0.41.1",
+    "@types/bun": "^1.2.23",
     "npm-check-updates": "^19.0.0",
     "npm-sort": "^0.0.4",
     "turbo": "^2.5.8",

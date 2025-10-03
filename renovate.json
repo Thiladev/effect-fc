@@ -2,5 +2,19 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "matchManagers": ["bun", "npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "bun minor+patch updates",
+      "groupSlug": "bun-minor-patch"
+    },
+    {
+      "matchManagers": ["bun", "npm"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "bun major updates",
+      "groupSlug": "bun-major"
+    }
   ]
 }
