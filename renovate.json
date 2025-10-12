@@ -1,8 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ],
+  "extends": ["config:recommended"],
+  "baseBranchPatterns": ["next"],
   "packageRules": [
     {
       "matchManagers": ["bun", "npm"],
@@ -11,10 +10,10 @@
       "groupSlug": "bun-minor-patch"
     },
     {
-      "matchManagers": ["bun", "npm"],
-      "matchUpdateTypes": ["major"],
-      "groupName": "bun major updates",
-      "groupSlug": "bun-major"
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "groupName": "docker minor+patch+digest updates",
+      "groupSlug": "docker-minor-patch-digest"
     }
   ]
 }
