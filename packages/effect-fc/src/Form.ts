@@ -156,13 +156,14 @@ export const submit = <A, I, R, SA, SE, SR>(
         Effect.andThen(identity),
         Effect.tap(Ref.set(self.submitStateRef, AsyncData.loading())),
         Effect.andThen(flow(
-            self.submit,
+            self.submit as (value: NoInfer<A>) => Effect.Effect<SA, SE | ParseResult.ParseError, SR>,
+            Effect.tapErrorTag("ParseError", e => Ref.set(self.errorRef, Option.some(e as ParseResult.ParseError))),
             Effect.exit,
             Effect.map(Exit.match({
                 onSuccess: a => AsyncData.success(a),
-                onFailure: e => AsyncData.failure(e),
+                onFailure: e => AsyncData.failure(e as Cause.Cause<SE>),
             })),
-            Effect.tap(v => Ref.set(self.submitStateRef, v))
+            Effect.tap(v => Ref.set(self.submitStateRef, v)),
         )),
     ),
 
