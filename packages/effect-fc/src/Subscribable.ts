@@ -1,4 +1,4 @@
-import { type Effect, Effectable, Readable, type Stream, Subscribable } from "effect"
+import { Effect, Effectable, Readable, Stream, Subscribable, type SubscriptionRef } from "effect"
 
 
 class SubscribableImpl<A, E, R>
@@ -22,3 +22,11 @@ export const make = <A, E, R>(values: {
     readonly get: Effect.Effect<A, E, R>
     readonly changes: Stream.Stream<A, E, R>
 }): Subscribable.Subscribable<A, E, R> => new SubscribableImpl(values.get, values.changes)
+
+export const flatMapSubscriptionRef = <A, B, E, R>(
+    ref: SubscriptionRef.SubscriptionRef<A>,
+    flatMap: (value: NoInfer<A>) => Effect.Effect<B, E, R>,
+): Subscribable.Subscribable<B, E, R> => make({
+    get: Effect.flatMap(ref, flatMap),
+    get changes() { return Stream.flatMap(ref.changes, flatMap) },
+})

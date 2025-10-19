@@ -199,19 +199,13 @@ export const field = <A, I, R, SA, SE, SR, const P extends PropertyPath.Paths<No
 
     SubscriptionSubRef.makeFromPath(self.encodedValueRef, path),
 
-    pipe(
-        Option.match({
-            onSome: (v: ParseResult.ParseError) => Effect.andThen(
-                ParseResult.ArrayFormatter.formatError(v),
-                Array.filter(issue => PropertyPath.equivalence(issue.path, path)),
-            ),
-            onNone: () => Effect.succeed([]),
-        }),
-        filter => SubscribableInternal.make({
-            get: Effect.flatMap(self.errorRef.get, filter),
-            get changes() { return Stream.flatMap(self.errorRef.changes, filter) },
-        }),
-    ),
+    SubscribableInternal.flatMapSubscriptionRef(self.errorRef, Option.match({
+        onSome: flow(
+            ParseResult.ArrayFormatter.formatError,
+            Effect.map(Array.filter(issue => PropertyPath.equivalence(issue.path, path))),
+        ),
+        onNone: () => Effect.succeed([]),
+    })),
 
     pipe(
         Option.isSome,
