@@ -39,7 +39,7 @@ class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
         ),
 
         initialEncodedValue: { email: "", password: "", birth: Option.none() },
-        submit: v => Effect.sleep("500 millis").pipe(
+        submitFn: v => Effect.sleep("500 millis").pipe(
             Effect.andThen(Console.log(v)),
             Effect.andThen(Effect.sync(() => alert("Done!"))),
         ),
