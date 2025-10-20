@@ -10,7 +10,7 @@ extends TextField.RootProps, Form.useInput.Options {
 }
 
 interface OptionalProps
-extends Omit<TextField.RootProps, "defaultValue">, Form.useOptionalInput.Options<string> {
+extends Omit<TextField.RootProps, "optional" | "defaultValue">, Form.useOptionalInput.Options<string> {
     readonly optional: true
     readonly field: Form.FormField<any, Option.Option<string>>
 }
