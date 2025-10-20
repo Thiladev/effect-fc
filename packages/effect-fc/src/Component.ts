@@ -407,3 +407,15 @@ export const withRuntime: {
         props,
     )
 })
+
+export const useOnMount: {
+    <A, E, R>(
+        f: () => Effect.Effect<A, E, R>
+    ): Effect.Effect<A, E, R>
+} = Effect.fnUntraced(function* <A, E, R>(
+    f: () => Effect.Effect<A, E, R>
+) {
+    const runtime = yield* Effect.runtime()
+    // biome-ignore lint/correctness/useExhaustiveDependencies: only computed on mount
+    return yield* React.useMemo(() => Runtime.runSync(runtime)(Effect.cached(f())), [])
+})
