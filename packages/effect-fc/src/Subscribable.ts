@@ -1,24 +1,17 @@
-import { type Effect, Effectable, Readable, type Stream, Subscribable } from "effect"
+import { Effect, Stream, Subscribable } from "effect"
 
 
-class SubscribableImpl<A, E, R>
-extends Effectable.Class<A, E, R> implements Subscribable.Subscribable<A, E, R> {
-    readonly [Readable.TypeId]: Readable.TypeId = Readable.TypeId
-    readonly [Subscribable.TypeId]: Subscribable.TypeId = Subscribable.TypeId
+export const zipLatestAll = <T extends ReadonlyArray<Subscribable.Subscribable<any, any, any>>>(
+    ...subscribables: T
+): Subscribable.Subscribable<
+    [T[number]] extends [never]
+        ? never
+        : { [K in keyof T]: T[K] extends Subscribable.Subscribable<infer A, infer _E, infer _R> ? A : never },
+    [T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer _E, infer _R> ? _E : never,
+    [T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer _E, infer _R> ? _R : never
+> => Subscribable.make({
+    get: Effect.all(subscribables.map(v => v.get)),
+    changes: Stream.zipLatestAll(...subscribables.map(v => v.changes)),
+}) as any
 
-    constructor(
-        readonly get: Effect.Effect<A, E, R>,
-        readonly changes: Stream.Stream<A, E, R>,
-    ) {
-        super()
-    }
-
-    commit() {
-        return this.get
-    }
-}
-
-export const make = <A, E, R>(values: {
-    readonly get: Effect.Effect<A, E, R>
-    readonly changes: Stream.Stream<A, E, R>
-}): Subscribable.Subscribable<A, E, R> => new SubscribableImpl(values.get, values.changes)
+export * from "effect/Subscribable"

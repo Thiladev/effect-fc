@@ -1,5 +1,5 @@
 import { Callout, Flex, Spinner, Switch, TextField } from "@radix-ui/themes"
-import { Array, Option } from "effect"
+import { Array, Option, Struct } from "effect"
 import { Component, Form, Hooks } from "effect-fc"
 
 
@@ -10,7 +10,7 @@ extends TextField.RootProps, Form.useInput.Options {
 }
 
 interface OptionalProps
-extends Omit<TextField.RootProps, "defaultValue">, Form.useOptionalInput.Options<string> {
+extends Omit<TextField.RootProps, "optional" | "defaultValue">, Form.useOptionalInput.Options<string> {
     readonly optional: true
     readonly field: Form.FormField<any, Option.Option<string>>
 }
@@ -41,7 +41,7 @@ export class TextFieldFormInput extends Component.makeUntraced("TextFieldFormInp
                     value={input.value}
                     onChange={e => input.setValue(e.target.value)}
                     disabled={(input.optional && !input.enabled) || isSubmitting}
-                    {...props}
+                    {...Struct.omit(props, "optional", "defaultValue")}
                 >
                     {input.optional &&
                         <TextField.Slot side="left">

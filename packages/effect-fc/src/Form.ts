@@ -1,10 +1,10 @@
 import * as AsyncData from "@typed/async-data"
-import { Array, Cause, Chunk, type Duration, Effect, Equal, Exit, Fiber, flow, identity, Option, ParseResult, Pipeable, Predicate, pipe, Ref, Schema, type Scope, Stream, type Subscribable, SubscriptionRef } from "effect"
+import { Array, Cause, Chunk, type Duration, Effect, Equal, Exit, Fiber, flow, identity, Option, ParseResult, Pipeable, Predicate, Ref, Schema, type Scope, Stream, SubscriptionRef } from "effect"
 import type { NoSuchElementException } from "effect/Cause"
 import * as React from "react"
 import * as Hooks from "./Hooks/index.js"
 import * as PropertyPath from "./PropertyPath.js"
-import * as SubscribableInternal from "./Subscribable.js"
+import * as Subscribable from "./Subscribable.js"
 import * as SubscriptionSubRef from "./SubscriptionSubRef.js"
 
 
@@ -16,7 +16,7 @@ extends Pipeable.Pipeable {
     readonly [FormTypeId]: FormTypeId
 
     readonly schema: Schema.Schema<A, I, R>
-    readonly submit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>
+    readonly onSubmit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>
     readonly debounce: Option.Option<Duration.DurationInput>
 
     readonly valueRef: SubscriptionRef.SubscriptionRef<Option.Option<A>>
@@ -34,7 +34,7 @@ extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR> {
 
     constructor(
         readonly schema: Schema.Schema<A, I, R>,
-        readonly submit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>,
+        readonly onSubmit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>,
         readonly debounce: Option.Option<Duration.DurationInput>,
 
         readonly valueRef: SubscriptionRef.SubscriptionRef<Option.Option<A>>,
@@ -55,7 +55,7 @@ export namespace make {
     export interface Options<in out A, in out I, out R, in out SA = void, in out SE = A, out SR = never> {
         readonly schema: Schema.Schema<A, I, R>
         readonly initialEncodedValue: NoInfer<I>
-        readonly submit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>,
+        readonly onSubmit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>,
         readonly debounce?: Duration.DurationInput,
     }
 }
@@ -74,7 +74,7 @@ export const make: {
 
     return new FormImpl(
         options.schema,
-        options.submit,
+        options.onSubmit,
         Option.fromNullable(options.debounce),
 
         valueRef,
@@ -83,28 +83,14 @@ export const make: {
         validationFiberRef,
         submitStateRef,
 
-        pipe(
-            <A>([value, error, validationFiber, submitState]: readonly [
-                Option.Option<A>,
-                Option.Option<ParseResult.ParseError>,
-                Option.Option<Fiber.Fiber<void, never>>,
-                AsyncData.AsyncData<SA, SE>,
-            ]) => Option.isSome(value) && Option.isNone(error) && Option.isNone(validationFiber) && !AsyncData.isLoading(submitState),
-
-            filter => SubscribableInternal.make({
-                get: Effect.map(Effect.all([valueRef, errorRef, validationFiberRef, submitStateRef]), filter),
-                get changes() {
-                    return Stream.map(
-                        Stream.zipLatestAll(
-                            valueRef.changes,
-                            errorRef.changes,
-                            validationFiberRef.changes,
-                            submitStateRef.changes,
-                        ),
-                        filter,
-                    )
-                },
-            }),
+        Subscribable.map(
+            Subscribable.zipLatestAll(valueRef, errorRef, validationFiberRef, submitStateRef),
+            ([value, error, validationFiber, submitState]) => (
+                Option.isSome(value) &&
+                Option.isNone(error) &&
+                Option.isNone(validationFiber) &&
+                !AsyncData.isLoading(submitState)
+            ),
         ),
     )
 })
@@ -156,13 +142,14 @@ export const submit = <A, I, R, SA, SE, SR>(
         Effect.andThen(identity),
         Effect.tap(Ref.set(self.submitStateRef, AsyncData.loading())),
         Effect.andThen(flow(
-            self.submit,
+            self.onSubmit as (value: NoInfer<A>) => Effect.Effect<SA, SE | ParseResult.ParseError, SR>,
+            Effect.tapErrorTag("ParseError", e => Ref.set(self.errorRef, Option.some(e as ParseResult.ParseError))),
             Effect.exit,
             Effect.map(Exit.match({
                 onSuccess: a => AsyncData.success(a),
-                onFailure: e => AsyncData.failure(e),
+                onFailure: e => AsyncData.failure(e as Cause.Cause<SE>),
             })),
-            Effect.tap(v => Ref.set(self.submitStateRef, v))
+            Effect.tap(v => Ref.set(self.submitStateRef, v)),
         )),
     ),
 
@@ -185,48 +172,20 @@ export const field = <A, I, R, SA, SE, SR, const P extends PropertyPath.Paths<No
     self: Form<A, I, R, SA, SE, SR>,
     path: P,
 ): FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>> => new FormFieldImpl(
-    pipe(
-        Option.match({
-            onSome: (v: A) => Option.map(PropertyPath.get(v, path), Option.some),
-            onNone: () => Option.some(Option.none()),
-        }),
-        filter => SubscribableInternal.make({
-            get: Effect.flatMap(self.valueRef, filter),
-            get changes() { return Stream.flatMap(self.valueRef.changes, filter) },
-        }),
-    ),
-
+    Subscribable.mapEffect(self.valueRef, Option.match({
+        onSome: v => Option.map(PropertyPath.get(v, path), Option.some),
+        onNone: () => Option.some(Option.none()),
+    })),
     SubscriptionSubRef.makeFromPath(self.encodedValueRef, path),
-
-    pipe(
-        Option.match({
-            onSome: (v: ParseResult.ParseError) => Effect.andThen(
-                ParseResult.ArrayFormatter.formatError(v),
-                Array.filter(issue => PropertyPath.equivalence(issue.path, path)),
-            ),
-            onNone: () => Effect.succeed([]),
-        }),
-        filter => SubscribableInternal.make({
-            get: Effect.flatMap(self.errorRef.get, filter),
-            get changes() { return Stream.flatMap(self.errorRef.changes, filter) },
-        }),
-    ),
-
-    pipe(
-        Option.isSome,
-        filter => SubscribableInternal.make({
-            get: Effect.map(self.validationFiberRef.get, filter),
-            get changes() { return Stream.map(self.validationFiberRef.changes, filter) },
-        }),
-    ),
-
-    pipe(
-        AsyncData.isLoading,
-        filter => SubscribableInternal.make({
-            get: Effect.map(self.submitStateRef, filter),
-            get changes() { return Stream.map(self.submitStateRef.changes, filter) },
-        }),
-    ),
+    Subscribable.mapEffect(self.errorRef, Option.match({
+        onSome: flow(
+            ParseResult.ArrayFormatter.formatError,
+            Effect.map(Array.filter(issue => PropertyPath.equivalence(issue.path, path))),
+        ),
+        onNone: () => Effect.succeed([]),
+    })),
+    Subscribable.map(self.validationFiberRef, Option.isSome),
+    Subscribable.map(self.submitStateRef, AsyncData.isLoading)
 )
 
 
