@@ -55,7 +55,7 @@ const ComponentProto = Object.freeze({
         this: Component<P, A, E, R>
     ) {
         const self = this
-        // biome-ignore lint/style/noNonNullAssertion: context initialization
+        // biome-ignore lint/style/noNonNullAssertion: React ref initialization
         const runtimeRef = React.useRef<Runtime.Runtime<Exclude<R, Scope.Scope>>>(null!)
         runtimeRef.current = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
 

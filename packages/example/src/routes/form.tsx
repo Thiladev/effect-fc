@@ -39,7 +39,7 @@ class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
         ),
 
         initialEncodedValue: { email: "", password: "", birth: Option.none() },
-        submitFn: v => Effect.sleep("500 millis").pipe(
+        onSubmit: v => Effect.sleep("500 millis").pipe(
             Effect.andThen(Console.log(v)),
             Effect.andThen(Effect.sync(() => alert("Done!"))),
         ),
@@ -47,7 +47,7 @@ class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
     })
 }) {}
 
-class RegisterPage extends Component.makeUntraced("RegisterPage")(function*() {
+class RegisterFormView extends Component.makeUntraced("RegisterFormView")(function*() {
     const form = yield* RegisterForm
     const submit = yield* Form.useSubmit(form)
     const [canSubmit] = yield* Hooks.useSubscribables(form.canSubmitSubscribable)
@@ -84,16 +84,18 @@ class RegisterPage extends Component.makeUntraced("RegisterPage")(function*() {
     )
 }) {}
 
+const RegisterPage = Component.makeUntraced("RegisterPage")(function*() {
+    const RegisterFormViewFC = yield* Effect.provide(
+        RegisterFormView,
+        yield* Hooks.useContext(RegisterForm.Default, { finalizerExecutionMode: "fork" }),
+    )
+
+    return <RegisterFormViewFC />
+}).pipe(
+    Component.withRuntime(runtime.context)
+)
+
 
 export const Route = createFileRoute("/form")({
-    component: Component.makeUntraced("RegisterRoute")(function*() {
-        const RegisterRouteFC = yield* Effect.provide(
-            RegisterPage,
-            yield* Hooks.useContext(RegisterForm.Default, { finalizerExecutionMode: "fork" }),
-        )
-
-        return <RegisterRouteFC />
-    }).pipe(
-        Component.withRuntime(runtime.context)
-    )
+    component: RegisterPage
 })

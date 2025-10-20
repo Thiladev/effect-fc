@@ -16,7 +16,7 @@ extends Pipeable.Pipeable {
     readonly [FormTypeId]: FormTypeId
 
     readonly schema: Schema.Schema<A, I, R>
-    readonly submitFn: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>
+    readonly onSubmit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>
     readonly debounce: Option.Option<Duration.DurationInput>
 
     readonly valueRef: SubscriptionRef.SubscriptionRef<Option.Option<A>>
@@ -34,7 +34,7 @@ extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR> {
 
     constructor(
         readonly schema: Schema.Schema<A, I, R>,
-        readonly submitFn: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>,
+        readonly onSubmit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>,
         readonly debounce: Option.Option<Duration.DurationInput>,
 
         readonly valueRef: SubscriptionRef.SubscriptionRef<Option.Option<A>>,
@@ -55,7 +55,7 @@ export namespace make {
     export interface Options<in out A, in out I, out R, in out SA = void, in out SE = A, out SR = never> {
         readonly schema: Schema.Schema<A, I, R>
         readonly initialEncodedValue: NoInfer<I>
-        readonly submitFn: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>,
+        readonly onSubmit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>,
         readonly debounce?: Duration.DurationInput,
     }
 }
@@ -74,7 +74,7 @@ export const make: {
 
     return new FormImpl(
         options.schema,
-        options.submitFn,
+        options.onSubmit,
         Option.fromNullable(options.debounce),
 
         valueRef,
@@ -142,7 +142,7 @@ export const submit = <A, I, R, SA, SE, SR>(
         Effect.andThen(identity),
         Effect.tap(Ref.set(self.submitStateRef, AsyncData.loading())),
         Effect.andThen(flow(
-            self.submitFn as (value: NoInfer<A>) => Effect.Effect<SA, SE | ParseResult.ParseError, SR>,
+            self.onSubmit as (value: NoInfer<A>) => Effect.Effect<SA, SE | ParseResult.ParseError, SR>,
             Effect.tapErrorTag("ParseError", e => Ref.set(self.errorRef, Option.some(e as ParseResult.ParseError))),
             Effect.exit,
             Effect.map(Exit.match({
