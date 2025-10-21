@@ -18,7 +18,7 @@ extends Pipeable.Pipeable {
 
     readonly schema: Schema.Schema<A, I, R>
     readonly onSubmit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>
-    readonly autosubmit: Option.Option<boolean>
+    readonly autosubmit: boolean
     readonly debounce: Option.Option<Duration.DurationInput>
 
     readonly valueRef: SubscriptionRef.SubscriptionRef<Option.Option<A>>
@@ -37,7 +37,7 @@ extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR> {
     constructor(
         readonly schema: Schema.Schema<A, I, R>,
         readonly onSubmit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>,
-        readonly autosubmit: Option.Option<boolean>,
+        readonly autosubmit: boolean,
         readonly debounce: Option.Option<Duration.DurationInput>,
 
         readonly valueRef: SubscriptionRef.SubscriptionRef<Option.Option<A>>,
@@ -82,7 +82,7 @@ export const make: {
     return new FormImpl(
         options.schema,
         options.onSubmit,
-        Option.fromNullable(options.autosubmit),
+        options.autosubmit ?? false,
         Option.fromNullable(options.debounce),
 
         valueRef,
@@ -128,13 +128,17 @@ export const run = <A, I, R, SA, SE, SR>(
                         onFailure: c => Option.match(
                             Chunk.findFirst(Cause.failures(c), e => e._tag === "ParseError"),
                             {
-                                onSome: e => SubscriptionRef.set(self.errorRef, Option.some(e)),
-                                onNone: () => Effect.void,
+                                onSome: e => Effect.as(SubscriptionRef.set(self.errorRef, Option.some(e)), Option.none()),
+                                onNone: () => Effect.succeed(Option.none()),
                             },
                         ),
                     }),
                     Effect.uninterruptible,
                 )),
+                Effect.andThen(value => Option.isSome(value) && self.autosubmit
+                    ?
+                    : Effect.void
+                ),
                 Effect.scoped,
                 Effect.forkScoped,
             )
