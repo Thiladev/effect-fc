@@ -5,9 +5,15 @@ import { Component, Form, Hooks, Memoized, Subscribable, SubscriptionSubRef } fr
 import { FaArrowDown, FaArrowUp } from "react-icons/fa"
 import { FaDeleteLeft } from "react-icons/fa6"
 import * as Domain from "@/domain"
+import { TextFieldFormInput } from "@/lib/form/TextFieldFormInput"
 import { DateTimeUtcFromZonedInput } from "@/lib/schema"
 import { TodosState } from "./TodosState.service"
 
+
+const TodoFormSchema = Schema.compose(Schema.Struct({
+    ...Domain.Todo.Todo.fields,
+    completedAt: Schema.OptionFromSelf(DateTimeUtcFromZonedInput),
+}), Domain.Todo.Todo)
 
 const makeTodo = makeUuid4.pipe(
     Effect.map(id => Domain.Todo.Todo.make({
@@ -28,51 +34,62 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
     const runtime = yield* Effect.runtime()
     const state = yield* TodosState
 
-    const { ref, indexRef, contentRef, completedAtRef } = yield* Hooks.useMemo(() => Match.value(props).pipe(
-        Match.tag("new", () => Effect.Do.pipe(
-            Effect.bind("ref", () => Effect.andThen(makeTodo, SubscriptionRef.make)),
-            Effect.let("indexRef", () => Subscribable.make({ get: Effect.succeed(-1), changes: Stream.empty })),
-        )),
-        Match.tag("edit", ({ id }) => Effect.Do.pipe(
-            Effect.let("ref", () => state.getElementRef(id)),
-            Effect.let("indexRef", () => state.getIndexSubscribable(id)),
-        )),
-        Match.exhaustive,
+    const [indexRef, form, contentField, completedAtField] = yield* Component.useOnChange(() => Effect.gen(function*() {
+        const indexRef = Match.value(props).pipe(
+            Match.tag("new", () => Subscribable.make({ get: Effect.succeed(-1), changes: Stream.empty })),
+            Match.tag("edit", ({ id }) => state.getIndexSubscribable(id)),
+            Match.exhaustive,
+        )
 
-        Effect.let("contentRef", ({ ref }) => SubscriptionSubRef.makeFromPath(ref, ["content"])),
-        Effect.let("completedAtRef", ({ ref }) => SubscriptionSubRef.makeFromPath(ref, ["completedAt"])),
-    ), [props._tag, props._tag === "edit" ? props.id : undefined])
-
-    const { form } = yield* Component.useOnChange(() => Effect.gen(function*() {
         const form = yield* Form.service({
-            schema: Domain.Todo.TodoFromJson,
-            initialEncodedValue: yield* Schema.encode(Domain.Todo.TodoFromJson)(
+            schema: TodoFormSchema,
+            initialEncodedValue: yield* Schema.encode(TodoFormSchema)(
                 yield* Match.value(props).pipe(
                     Match.tag("new", () => makeTodo),
                     Match.tag("edit", ({ id }) => state.getElementRef(id)),
                     Match.exhaustive,
                 )
             ),
-            onSubmit: v => Effect.void,
+            onSubmit: function(todo) {
+                return Match.value(props).pipe(
+                    Match.tag("new", () => Ref.update(state.ref, Chunk.prepend(todo)).pipe(
+                        Effect.andThen(makeTodo),
+                        Effect.andThen(Schema.encode(TodoFormSchema)),
+                        Effect.andThen(v => Ref.set(this.encodedValueRef, v)),
+                    )),
+                    Match.tag("edit", ({ id }) => Ref.set(state.getElementRef(id), todo)),
+                    Match.exhaustive,
+                )
+            },
         })
 
-        return { form }
+        return [
+            indexRef,
+            form,
+            Form.field(form, ["content"]),
+            Form.field(form, ["completedAt"]),
+        ] as const
     }), [props._tag, props._tag === "edit" ? props.id : undefined])
 
     const [index, size] = yield* Hooks.useSubscribables(indexRef, state.sizeSubscribable)
+    const submit = yield* Form.useSubmit(form)
+    const TextFieldFormInputFC = yield* TextFieldFormInput
 
 
     return (
         <Flex direction="row" align="center" gap="2">
             <Box flexGrow="1">
                 <Flex direction="column" align="stretch" gap="2">
-                    <StringTextAreaInputFC ref={contentRef} />
+                    <TextFieldFormInputFC
+                        field={contentField}
+                    />
 
                     <Flex direction="row" justify="center" align="center" gap="2">
-                        <OptionalDateTimeInputFC
+                        <TextFieldFormInputFC
+                            optional
+                            field={completedAtField}
                             type="datetime-local"
-                            ref={completedAtRef}
-                            defaultValue={yield* Hooks.useOnce(() => DateTime.now)}
+                            defaultValue=""
                         />
 
                         {props._tag === "new" &&

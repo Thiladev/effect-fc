@@ -18,6 +18,7 @@ extends Pipeable.Pipeable {
 
     readonly schema: Schema.Schema<A, I, R>
     readonly onSubmit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>
+    readonly autosubmit: Option.Option<boolean>
     readonly debounce: Option.Option<Duration.DurationInput>
 
     readonly valueRef: SubscriptionRef.SubscriptionRef<Option.Option<A>>
@@ -36,6 +37,7 @@ extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR> {
     constructor(
         readonly schema: Schema.Schema<A, I, R>,
         readonly onSubmit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>,
+        readonly autosubmit: Option.Option<boolean>,
         readonly debounce: Option.Option<Duration.DurationInput>,
 
         readonly valueRef: SubscriptionRef.SubscriptionRef<Option.Option<A>>,
@@ -53,11 +55,15 @@ extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR> {
 export const isForm = (u: unknown): u is Form<unknown, unknown, unknown, unknown, unknown, unknown> => Predicate.hasProperty(u, FormTypeId)
 
 export namespace make {
-    export interface Options<in out A, in out I, out R, in out SA = void, in out SE = A, out SR = never> {
+    export interface Options<in out A, in out I, in out R, in out SA = void, in out SE = A, out SR = never> {
         readonly schema: Schema.Schema<A, I, R>
         readonly initialEncodedValue: NoInfer<I>
-        readonly onSubmit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>,
-        readonly debounce?: Duration.DurationInput,
+        readonly onSubmit: (
+            this: Form<NoInfer<A>, NoInfer<I>, NoInfer<R>, unknown, unknown, unknown>,
+            value: NoInfer<A>,
+        ) => Effect.Effect<SA, SE, SR>
+        readonly autosubmit?: boolean
+        readonly debounce?: Duration.DurationInput
     }
 }
 
@@ -76,6 +82,7 @@ export const make: {
     return new FormImpl(
         options.schema,
         options.onSubmit,
+        Option.fromNullable(options.autosubmit),
         Option.fromNullable(options.debounce),
 
         valueRef,
@@ -114,9 +121,9 @@ export const run = <A, I, R, SA, SE, SR>(
                 Effect.exit,
                 Effect.andThen(flow(
                     Exit.matchEffect({
-                        onSuccess: v => Effect.andThen(
-                            SubscriptionRef.set(self.valueRef, Option.some(v)),
-                            SubscriptionRef.set(self.errorRef, Option.none()),
+                        onSuccess: v => SubscriptionRef.set(self.valueRef, Option.some(v)).pipe(
+                            Effect.andThen(SubscriptionRef.set(self.errorRef, Option.none())),
+                            Effect.as(Option.some(v)),
                         ),
                         onFailure: c => Option.match(
                             Chunk.findFirst(Cause.failures(c), e => e._tag === "ParseError"),
@@ -158,7 +165,7 @@ export const submit = <A, I, R, SA, SE, SR>(
 )
 
 export namespace service {
-    export interface Options<in out A, in out I, out R, in out SA = void, in out SE = A, out SR = never>
+    export interface Options<in out A, in out I, in out R, in out SA = void, in out SE = A, out SR = never>
     extends make.Options<A, I, R, SA, SE, SR> {}
 }
 
