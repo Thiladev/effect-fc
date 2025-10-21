@@ -1,10 +1,11 @@
 import * as AsyncData from "@typed/async-data"
-import { Array, Cause, Chunk, type Duration, Effect, Equal, Exit, Fiber, flow, identity, Option, ParseResult, Pipeable, Predicate, Ref, Schema, type Scope, Stream, SubscriptionRef } from "effect"
+import { Array, Cause, Chunk, type Duration, Effect, Equal, Exit, Fiber, flow, identity, Option, ParseResult, Pipeable, Predicate, Ref, Schema, type Scope, Stream } from "effect"
 import type { NoSuchElementException } from "effect/Cause"
 import * as React from "react"
-import * as Hooks from "./Hooks/index.js"
+import * as Component from "./Component.js"
 import * as PropertyPath from "./PropertyPath.js"
 import * as Subscribable from "./Subscribable.js"
+import * as SubscriptionRef from "./SubscriptionRef.js"
 import * as SubscriptionSubRef from "./SubscriptionSubRef.js"
 
 
@@ -163,7 +164,7 @@ export namespace service {
 
 export const service = <A, I = A, R = never, SA = void, SE = A, SR = never>(
     options: service.Options<A, I, R, SA, SE, SR>
-): Effect.Effect<Form<A, I, R, SA, SE, SR>, never, R | Scope.Scope> => Effect.tap(
+): Effect.Effect<Form<A, I, R, SA, SE, SR>, never, Scope.Scope | R> => Effect.tap(
     make(options),
     form => Effect.forkScoped(run(form)),
 )
@@ -220,24 +221,6 @@ extends Pipeable.Class() implements FormField<A, I> {
 
 export const isFormField = (u: unknown): u is FormField<unknown, unknown> => Predicate.hasProperty(u, FormFieldTypeId)
 
-export namespace useForm {
-    export interface Options<in out A, in out I, out R, in out SA = void, in out SE = A, out SR = never>
-    extends make.Options<A, I, R, SA, SE, SR> {}
-}
-
-export const useForm: {
-    <A, I = A, R = never, SA = void, SE = A, SR = never>(
-        options: make.Options<A, I, R, SA, SE, SR>,
-        deps: React.DependencyList,
-    ): Effect.Effect<Form<A, I, R, SA, SE, SR>, never, R>
-} = Effect.fnUntraced(function* <A, I = A, R = never, SA = void, SE = A, SR = never>(
-    options: make.Options<A, I, R, SA, SE, SR>,
-    deps: React.DependencyList,
-) {
-    const form = yield* Hooks.useMemo(() => make(options), [options.debounce, ...deps])
-    yield* Hooks.useFork(() => run(form), [form])
-    return form
-})
 
 export const useSubmit = <A, I, R, SA, SE, SR>(
     self: Form<A, I, R, SA, SE, SR>
@@ -245,7 +228,7 @@ export const useSubmit = <A, I, R, SA, SE, SR>(
     () => Promise<Option.Option<AsyncData.AsyncData<SA, SE>>>,
     never,
     SR
-> => Hooks.useCallbackPromise(() => submit(self), [self])
+> => Component.useCallbackPromise(() => submit(self), [self])
 
 export const useField = <A, I, R, SA, SE, SR, const P extends PropertyPath.Paths<NoInfer<I>>>(
     self: Form<A, I, R, SA, SE, SR>,
@@ -271,33 +254,34 @@ export const useInput: {
     <A, I>(
         field: FormField<A, I>,
         options?: useInput.Options,
-    ): Effect.Effect<useInput.Result<I>, NoSuchElementException>
+    ): Effect.Effect<useInput.Result<I>, NoSuchElementException, Scope.Scope>
 } = Effect.fnUntraced(function* <A, I>(
     field: FormField<A, I>,
     options?: useInput.Options,
 ) {
-    const internalValueRef = yield* Hooks.useMemo(() => Effect.andThen(field.encodedValueRef, SubscriptionRef.make), [field])
-    const [value, setValue] = yield* Hooks.useRefState(internalValueRef)
-
-    yield* Hooks.useFork(() => Effect.all([
-        Stream.runForEach(
-            Stream.drop(field.encodedValueRef, 1),
-            upstreamEncodedValue => Effect.whenEffect(
-                Ref.set(internalValueRef, upstreamEncodedValue),
-                Effect.andThen(internalValueRef, internalValue => !Equal.equals(upstreamEncodedValue, internalValue)),
+    const internalValueRef = yield* Component.useOnChange(() => Effect.tap(
+        Effect.andThen(field.encodedValueRef, SubscriptionRef.make),
+        internalValueRef => Effect.forkScoped(Effect.all([
+            Stream.runForEach(
+                Stream.drop(field.encodedValueRef, 1),
+                upstreamEncodedValue => Effect.whenEffect(
+                    Ref.set(internalValueRef, upstreamEncodedValue),
+                    Effect.andThen(internalValueRef, internalValue => !Equal.equals(upstreamEncodedValue, internalValue)),
+                ),
             ),
-        ),
 
-        Stream.runForEach(
-            internalValueRef.changes.pipe(
-                Stream.drop(1),
-                Stream.changesWith(Equal.equivalence()),
-                options?.debounce ? Stream.debounce(options.debounce) : identity,
+            Stream.runForEach(
+                internalValueRef.changes.pipe(
+                    Stream.drop(1),
+                    Stream.changesWith(Equal.equivalence()),
+                    options?.debounce ? Stream.debounce(options.debounce) : identity,
+                ),
+                internalValue => Ref.set(field.encodedValueRef, internalValue),
             ),
-            internalValue => Ref.set(field.encodedValueRef, internalValue),
-        ),
-    ], { concurrency: "unbounded" }), [field, internalValueRef, options?.debounce])
+        ], { concurrency: "unbounded" })),
+    ), [field, options?.debounce])
 
+    const [value, setValue] = yield* SubscriptionRef.useSubscriptionRefState(internalValueRef)
     return { value, setValue }
 })
 
@@ -316,55 +300,56 @@ export const useOptionalInput: {
     <A, I>(
         field: FormField<A, Option.Option<I>>,
         options: useOptionalInput.Options<I>,
-    ): Effect.Effect<useOptionalInput.Result<I>, NoSuchElementException>
+    ): Effect.Effect<useOptionalInput.Result<I>, NoSuchElementException, Scope.Scope>
 } = Effect.fnUntraced(function* <A, I>(
     field: FormField<A, Option.Option<I>>,
     options: useOptionalInput.Options<I>,
 ) {
-    const [enabledRef, internalValueRef] = yield* Hooks.useMemo(() => Effect.andThen(
-        field.encodedValueRef,
-        Option.match({
-            onSome: v => Effect.all([SubscriptionRef.make(true), SubscriptionRef.make(v)]),
-            onNone: () => Effect.all([SubscriptionRef.make(false), SubscriptionRef.make(options.defaultValue)]),
-        }),
-    ), [field])
+    const [enabledRef, internalValueRef] = yield* Component.useOnChange(() => Effect.tap(
+        Effect.andThen(
+            field.encodedValueRef,
+            Option.match({
+                onSome: v => Effect.all([SubscriptionRef.make(true), SubscriptionRef.make(v)]),
+                onNone: () => Effect.all([SubscriptionRef.make(false), SubscriptionRef.make(options.defaultValue)]),
+            }),
+        ),
 
-    const [enabled, setEnabled] = yield* Hooks.useRefState(enabledRef)
-    const [value, setValue] = yield* Hooks.useRefState(internalValueRef)
+        ([enabledRef, internalValueRef]) => Effect.forkScoped(Effect.all([
+            Stream.runForEach(
+                Stream.drop(field.encodedValueRef, 1),
 
-    yield* Hooks.useFork(() => Effect.all([
-        Stream.runForEach(
-            Stream.drop(field.encodedValueRef, 1),
+                upstreamEncodedValue => Effect.whenEffect(
+                    Option.match(upstreamEncodedValue, {
+                        onSome: v => Effect.andThen(
+                            Ref.set(enabledRef, true),
+                            Ref.set(internalValueRef, v),
+                        ),
+                        onNone: () => Effect.andThen(
+                            Ref.set(enabledRef, false),
+                            Ref.set(internalValueRef, options.defaultValue),
+                        ),
+                    }),
 
-            upstreamEncodedValue => Effect.whenEffect(
-                Option.match(upstreamEncodedValue, {
-                    onSome: v => Effect.andThen(
-                        Ref.set(enabledRef, true),
-                        Ref.set(internalValueRef, v),
+                    Effect.andThen(
+                        Effect.all([enabledRef, internalValueRef]),
+                        ([enabled, internalValue]) => !Equal.equals(upstreamEncodedValue, enabled ? Option.some(internalValue) : Option.none()),
                     ),
-                    onNone: () => Effect.andThen(
-                        Ref.set(enabledRef, false),
-                        Ref.set(internalValueRef, options.defaultValue),
-                    ),
-                }),
-
-                Effect.andThen(
-                    Effect.all([enabledRef, internalValueRef]),
-                    ([enabled, internalValue]) => !Equal.equals(upstreamEncodedValue, enabled ? Option.some(internalValue) : Option.none()),
                 ),
             ),
-        ),
 
-        Stream.runForEach(
-            enabledRef.changes.pipe(
-                Stream.zipLatest(internalValueRef.changes),
-                Stream.drop(1),
-                Stream.changesWith(Equal.equivalence()),
-                options?.debounce ? Stream.debounce(options.debounce) : identity,
+            Stream.runForEach(
+                enabledRef.changes.pipe(
+                    Stream.zipLatest(internalValueRef.changes),
+                    Stream.drop(1),
+                    Stream.changesWith(Equal.equivalence()),
+                    options?.debounce ? Stream.debounce(options.debounce) : identity,
+                ),
+                ([enabled, internalValue]) => Ref.set(field.encodedValueRef, enabled ? Option.some(internalValue) : Option.none()),
             ),
-            ([enabled, internalValue]) => Ref.set(field.encodedValueRef, enabled ? Option.some(internalValue) : Option.none()),
-        ),
-    ], { concurrency: "unbounded" }), [field, enabledRef, internalValueRef, options.debounce])
+        ], { concurrency: "unbounded" })),
+    ), [field, options.debounce])
 
+    const [enabled, setEnabled] = yield* SubscriptionRef.useSubscriptionRefState(enabledRef)
+    const [value, setValue] = yield* SubscriptionRef.useSubscriptionRefState(internalValueRef)
     return { enabled, setEnabled, value, setValue }
 })

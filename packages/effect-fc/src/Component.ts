@@ -1,8 +1,7 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: {} is the default type for React props */
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
-import { Context, Effect, Effectable, ExecutionStrategy, Function, Predicate, Runtime, Scope, Tracer, type Types, type Utils } from "effect"
+import { Context, Effect, Effectable, ExecutionStrategy, Exit, Function, Layer, ManagedRuntime, Predicate, Ref, Runtime, Scope, Tracer, type Types, type Utils } from "effect"
 import * as React from "react"
-import * as Hooks from "./Hooks/index.js"
 import { Memoized } from "./index.js"
 
 
@@ -46,6 +45,11 @@ export namespace Component {
     }
 }
 
+export interface ScopeOptions {
+    readonly finalizerExecutionMode?: "sync" | "fork"
+    readonly finalizerExecutionStrategy?: ExecutionStrategy.ExecutionStrategy
+}
+
 
 const ComponentProto = Object.freeze({
     ...Effectable.CommitPrototype,
@@ -60,7 +64,7 @@ const ComponentProto = Object.freeze({
         runtimeRef.current = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
 
         return React.useRef(function ScopeProvider(props: P) {
-            const scope = Runtime.runSync(runtimeRef.current)(Hooks.useScope(
+            const scope = Runtime.runSync(runtimeRef.current)(useScope(
                 Array.from(
                     Context.omit(...nonReactiveTags)(runtimeRef.current.context).unsafeMap.values()
                 ),
@@ -408,6 +412,55 @@ export const withRuntime: {
     )
 })
 
+
+export const useScope: {
+    (
+        deps: React.DependencyList,
+        options?: ScopeOptions,
+    ): Effect.Effect<Scope.Scope>
+} = Effect.fnUntraced(function*(deps, options) {
+    const runtime = yield* Effect.runtime()
+
+    // biome-ignore lint/correctness/useExhaustiveDependencies: no reactivity needed
+    const [isInitialRun, initialScope] = React.useMemo(() => Runtime.runSync(runtime)(Effect.all([
+        Ref.make(true),
+        Scope.make(options?.finalizerExecutionStrategy ?? ExecutionStrategy.sequential),
+    ])), [])
+    const [scope, setScope] = React.useState(initialScope)
+
+    React.useEffect(() => Runtime.runSync(runtime)(
+        Effect.if(isInitialRun, {
+            onTrue: () => Effect.as(
+                Ref.set(isInitialRun, false),
+                () => closeScope(scope, runtime, options),
+            ),
+
+            onFalse: () => Scope.make(options?.finalizerExecutionStrategy ?? ExecutionStrategy.sequential).pipe(
+                Effect.tap(scope => Effect.sync(() => setScope(scope))),
+                Effect.map(scope => () => closeScope(scope, runtime, options)),
+            ),
+        })
+    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
+    ), deps)
+
+    return scope
+})
+
+const closeScope = (
+    scope: Scope.CloseableScope,
+    runtime: Runtime.Runtime<never>,
+    options?: ScopeOptions,
+) => {
+    switch (options?.finalizerExecutionMode ?? "sync") {
+        case "sync":
+            Runtime.runSync(runtime)(Scope.close(scope, Exit.void))
+            break
+        case "fork":
+            Runtime.runFork(runtime)(Scope.close(scope, Exit.void))
+            break
+    }
+}
+
 export const useOnMount: {
     <A, E, R>(
         f: () => Effect.Effect<A, E, R>
@@ -430,6 +483,108 @@ export const useOnChange: {
     deps: React.DependencyList,
 ) {
     const runtime = yield* Effect.runtime<R>()
-    // biome-ignore lint/correctness/useExhaustiveDependencies: "f" is non-reactive
+    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
     return yield* React.useMemo(() => Runtime.runSync(runtime)(Effect.cached(f())), deps)
+})
+
+export const useReactEffect: {
+    <E, R>(
+        f: () => Effect.Effect<void, E, R>,
+        deps?: React.DependencyList,
+        options?: ScopeOptions,
+    ): Effect.Effect<void, never, Exclude<R, Scope.Scope>>
+} = Effect.fnUntraced(function* <E, R>(
+    f: () => Effect.Effect<void, E, R>,
+    deps?: React.DependencyList,
+    options?: ScopeOptions,
+) {
+    const runtime = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
+
+    React.useEffect(() => Effect.Do.pipe(
+        Effect.bind("scope", () => Scope.make(options?.finalizerExecutionStrategy ?? ExecutionStrategy.sequential)),
+        Effect.bind("exit", ({ scope }) => Effect.exit(Effect.provideService(f(), Scope.Scope, scope))),
+        Effect.map(({ scope }) =>
+            () => closeScope(scope, runtime, options)
+        ),
+        Runtime.runSync(runtime),
+    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
+    ), deps)
+})
+
+export const useReactLayoutEffect: {
+    <E, R>(
+        f: () => Effect.Effect<void, E, R>,
+        deps?: React.DependencyList,
+        options?: ScopeOptions,
+    ): Effect.Effect<void, never, Exclude<R, Scope.Scope>>
+} = Effect.fnUntraced(function* <E, R>(
+    f: () => Effect.Effect<void, E, R>,
+    deps?: React.DependencyList,
+    options?: ScopeOptions,
+) {
+    const runtime = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
+
+    React.useLayoutEffect(() => Effect.Do.pipe(
+        Effect.bind("scope", () => Scope.make(options?.finalizerExecutionStrategy ?? ExecutionStrategy.sequential)),
+        Effect.bind("exit", ({ scope }) => Effect.exit(Effect.provideService(f(), Scope.Scope, scope))),
+        Effect.map(({ scope }) =>
+            () => closeScope(scope, runtime, options)
+        ),
+        Runtime.runSync(runtime),
+    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
+    ), deps)
+})
+
+export const useCallbackSync: {
+    <Args extends unknown[], A, E, R>(
+        f: (...args: Args) => Effect.Effect<A, E, R>,
+        deps: React.DependencyList,
+    ): Effect.Effect<(...args: Args) => A, never, R>
+} = Effect.fnUntraced(function* <Args extends unknown[], A, E, R>(
+    f: (...args: Args) => Effect.Effect<A, E, R>,
+    deps: React.DependencyList,
+) {
+    // biome-ignore lint/style/noNonNullAssertion: context initialization
+    const runtimeRef = React.useRef<Runtime.Runtime<R>>(null!)
+    runtimeRef.current = yield* Effect.runtime<R>()
+
+    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
+    return React.useCallback((...args: Args) => Runtime.runSync(runtimeRef.current)(f(...args)), deps)
+})
+
+export const useCallbackPromise: {
+    <Args extends unknown[], A, E, R>(
+        f: (...args: Args) => Effect.Effect<A, E, R>,
+        deps: React.DependencyList,
+    ): Effect.Effect<(...args: Args) => Promise<A>, never, R>
+} = Effect.fnUntraced(function* <Args extends unknown[], A, E, R>(
+    f: (...args: Args) => Effect.Effect<A, E, R>,
+    deps: React.DependencyList,
+) {
+    // biome-ignore lint/style/noNonNullAssertion: context initialization
+    const runtimeRef = React.useRef<Runtime.Runtime<R>>(null!)
+    runtimeRef.current = yield* Effect.runtime<R>()
+
+    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
+    return React.useCallback((...args: Args) => Runtime.runPromise(runtimeRef.current)(f(...args)), deps)
+})
+
+export const useContext: {
+    <ROut, E, RIn>(
+        layer: Layer.Layer<ROut, E, RIn>,
+        options?: ScopeOptions,
+    ): Effect.Effect<Context.Context<ROut>, E, RIn>
+} = Effect.fnUntraced(function* <ROut, E, RIn>(
+    layer: Layer.Layer<ROut, E, RIn>,
+    options?: ScopeOptions,
+) {
+    const scope = yield* useScope([layer], options)
+
+    return yield* useOnChange(() => Effect.context<RIn>().pipe(
+        Effect.map(context => ManagedRuntime.make(Layer.provide(layer, Layer.succeedContext(context)))),
+        Effect.tap(runtime => Effect.addFinalizer(() => runtime.disposeEffect)),
+        Effect.andThen(runtime => runtime.runtimeEffect),
+        Effect.andThen(runtime => runtime.context),
+        Effect.provideService(Scope.Scope, scope),
+    ), [scope])
 })

@@ -1,18 +1,13 @@
 import { Box, Button, Flex, IconButton } from "@radix-ui/themes"
 import { GetRandomValues, makeUuid4 } from "@typed/id"
 import { Chunk, DateTime, Effect, Match, Option, Ref, Runtime, Schema, Stream, SubscriptionRef } from "effect"
-import { Component, Hooks, Memoized, Subscribable, SubscriptionSubRef } from "effect-fc"
+import { Component, Form, Hooks, Memoized, Subscribable, SubscriptionSubRef } from "effect-fc"
 import { FaArrowDown, FaArrowUp } from "react-icons/fa"
 import { FaDeleteLeft } from "react-icons/fa6"
 import * as Domain from "@/domain"
-import { TextAreaInput } from "@/lib/input/TextAreaInput"
-import { TextFieldInput } from "@/lib/input/TextFieldInput"
 import { DateTimeUtcFromZonedInput } from "@/lib/schema"
 import { TodosState } from "./TodosState.service"
 
-
-const StringTextAreaInput = TextAreaInput({ schema: Schema.String })
-const OptionalDateTimeInput = TextFieldInput({ optional: true, schema: DateTimeUtcFromZonedInput })
 
 const makeTodo = makeUuid4.pipe(
     Effect.map(id => Domain.Todo.Todo.make({
@@ -48,10 +43,23 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
         Effect.let("completedAtRef", ({ ref }) => SubscriptionSubRef.makeFromPath(ref, ["completedAt"])),
     ), [props._tag, props._tag === "edit" ? props.id : undefined])
 
-    const [index, size] = yield* Hooks.useSubscribables(indexRef, state.sizeSubscribable)
+    const { form } = yield* Component.useOnChange(() => Effect.gen(function*() {
+        const form = yield* Form.service({
+            schema: Domain.Todo.TodoFromJson,
+            initialEncodedValue: yield* Schema.encode(Domain.Todo.TodoFromJson)(
+                yield* Match.value(props).pipe(
+                    Match.tag("new", () => makeTodo),
+                    Match.tag("edit", ({ id }) => state.getElementRef(id)),
+                    Match.exhaustive,
+                )
+            ),
+            onSubmit: v => Effect.void,
+        })
 
-    const StringTextAreaInputFC = yield* StringTextAreaInput
-    const OptionalDateTimeInputFC = yield* OptionalDateTimeInput
+        return { form }
+    }), [props._tag, props._tag === "edit" ? props.id : undefined])
+
+    const [index, size] = yield* Hooks.useSubscribables(indexRef, state.sizeSubscribable)
 
 
     return (
