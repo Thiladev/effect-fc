@@ -469,8 +469,7 @@ export const useOnMount: {
     f: () => Effect.Effect<A, E, R>
 ) {
     const runtime = yield* Effect.runtime<R>()
-    // biome-ignore lint/correctness/useExhaustiveDependencies: only computed on mount
-    return yield* React.useMemo(() => Runtime.runSync(runtime)(Effect.cached(f())), [])
+    return yield* React.useState(() => Runtime.runSync(runtime)(Effect.cached(f())))[0]
 })
 
 export const useOnChange: {

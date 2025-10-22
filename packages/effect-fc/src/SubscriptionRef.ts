@@ -1,4 +1,4 @@
-import { Effect, Equivalence, type Scope, Stream, SubscriptionRef } from "effect"
+import { Effect, Equivalence, Ref, type Scope, Stream, SubscriptionRef } from "effect"
 import * as React from "react"
 import * as Component from "./Component.js"
 import * as SetStateAction from "./SetStateAction.js"
@@ -18,7 +18,7 @@ export const useSubscriptionRefState: {
 
     const setValue = yield* Component.useCallbackSync((setStateAction: React.SetStateAction<A>) =>
         Effect.andThen(
-            SubscriptionRef.updateAndGet(ref, prevState => SetStateAction.value(setStateAction, prevState)),
+            Ref.updateAndGet(ref, prevState => SetStateAction.value(setStateAction, prevState)),
             v => setReactStateValue(v),
         ),
     [ref])
@@ -35,7 +35,7 @@ export const useSubscriptionRefFromState: {
         Stream.changesWith(ref.changes, Equivalence.strict()),
         v => Effect.sync(() => setValue(v)),
     )), [setValue])
-    yield* Component.useReactEffect(() => SubscriptionRef.set(ref, value), [value])
+    yield* Component.useReactEffect(() => Ref.set(ref, value), [value])
 
     return ref
 })

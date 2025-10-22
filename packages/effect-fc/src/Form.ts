@@ -116,18 +116,18 @@ export const run = <A, I, R, SA, SE, SR>(
             onNone: () => Effect.void,
         })),
         Effect.andThen(
-            Effect.addFinalizer(() => SubscriptionRef.set(self.validationFiberRef, Option.none())).pipe(
+            Effect.addFinalizer(() => Ref.set(self.validationFiberRef, Option.none())).pipe(
                 Effect.andThen(Schema.decode(self.schema, { errors: "all" })(encodedValue)),
                 Effect.exit,
                 Effect.andThen(flow(
                     Exit.matchEffect({
-                        onSuccess: v => SubscriptionRef.set(self.valueRef, Option.some(v)).pipe(
-                            Effect.andThen(SubscriptionRef.set(self.errorRef, Option.none())),
+                        onSuccess: v => Ref.set(self.valueRef, Option.some(v)).pipe(
+                            Effect.andThen(Ref.set(self.errorRef, Option.none())),
                             Effect.as(Option.some(v)),
                         ),
                         onFailure: c => Chunk.findFirst(Cause.failures(c), e => e._tag === "ParseError").pipe(
                             Option.match({
-                                onSome: e => SubscriptionRef.set(self.errorRef, Option.some(e)),
+                                onSome: e => Ref.set(self.errorRef, Option.some(e)),
                                 onNone: () => Effect.void,
                             }),
                             Effect.as(Option.none<A>()),
@@ -144,7 +144,7 @@ export const run = <A, I, R, SA, SE, SR>(
                 Effect.forkScoped,
             )
         ),
-        Effect.andThen(fiber => SubscriptionRef.set(self.validationFiberRef, Option.some(fiber)))
+        Effect.andThen(fiber => Ref.set(self.validationFiberRef, Option.some(fiber)))
     ),
 )
 
