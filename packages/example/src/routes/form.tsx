@@ -1,7 +1,7 @@
 import { Button, Container, Flex } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
 import { Console, Effect, Option, ParseResult, Schema } from "effect"
-import { Component, Form, Hooks } from "effect-fc"
+import { Component, Form, Subscribable } from "effect-fc"
 import { TextFieldFormInput } from "@/lib/form/TextFieldFormInput"
 import { DateTimeUtcFromZonedInput } from "@/lib/schema"
 import { runtime } from "@/runtime"
@@ -50,7 +50,7 @@ class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
 class RegisterFormView extends Component.makeUntraced("RegisterFormView")(function*() {
     const form = yield* RegisterForm
     const submit = yield* Form.useSubmit(form)
-    const [canSubmit] = yield* Hooks.useSubscribables(form.canSubmitSubscribable)
+    const [canSubmit] = yield* Subscribable.useSubscribables(form.canSubmitSubscribable)
 
     const TextFieldFormInputFC = yield* TextFieldFormInput
 
@@ -87,7 +87,7 @@ class RegisterFormView extends Component.makeUntraced("RegisterFormView")(functi
 const RegisterPage = Component.makeUntraced("RegisterPage")(function*() {
     const RegisterFormViewFC = yield* Effect.provide(
         RegisterFormView,
-        yield* Hooks.useContext(RegisterForm.Default, { finalizerExecutionMode: "fork" }),
+        yield* Component.useContext(RegisterForm.Default, { finalizerExecutionMode: "fork" }),
     )
 
     return <RegisterFormViewFC />

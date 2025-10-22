@@ -1,7 +1,7 @@
 import { Box, Button, Flex, IconButton } from "@radix-ui/themes"
 import { GetRandomValues, makeUuid4 } from "@typed/id"
-import { Chunk, DateTime, Effect, Match, Option, Ref, Runtime, Schema, Stream, SubscriptionRef } from "effect"
-import { Component, Form, Hooks, Memoized, Subscribable, SubscriptionSubRef } from "effect-fc"
+import { Chunk, Effect, Match, Option, Ref, Runtime, Schema, Stream } from "effect"
+import { Component, Form, Subscribable } from "effect-fc"
 import { FaArrowDown, FaArrowUp } from "react-icons/fa"
 import { FaDeleteLeft } from "react-icons/fa6"
 import * as Domain from "@/domain"
@@ -61,6 +61,7 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
                     Match.exhaustive,
                 )
             },
+            autosubmit: props._tag === "edit",
         })
 
         return [
@@ -71,7 +72,7 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
         ] as const
     }), [props._tag, props._tag === "edit" ? props.id : undefined])
 
-    const [index, size] = yield* Hooks.useSubscribables(indexRef, state.sizeSubscribable)
+    const [index, size] = yield* Subscribable.useSubscribables(indexRef, state.sizeSubscribable)
     const submit = yield* Form.useSubmit(form)
     const TextFieldFormInputFC = yield* TextFieldFormInput
 
@@ -80,9 +81,7 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
         <Flex direction="row" align="center" gap="2">
             <Box flexGrow="1">
                 <Flex direction="column" align="stretch" gap="2">
-                    <TextFieldFormInputFC
-                        field={contentField}
-                    />
+                    <TextFieldFormInputFC field={contentField} />
 
                     <Flex direction="row" justify="center" align="center" gap="2">
                         <TextFieldFormInputFC
@@ -93,14 +92,7 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
                         />
 
                         {props._tag === "new" &&
-                            <Button
-                                onClick={() => ref.pipe(
-                                    Effect.andThen(todo => Ref.update(state.ref, Chunk.prepend(todo))),
-                                    Effect.andThen(makeTodo),
-                                    Effect.andThen(todo => Ref.set(ref, todo)),
-                                    Runtime.runSync(runtime),
-                                )}
-                            >
+                            <Button onClick={() => submit()}>
                                 Add
                             </Button>
                         }
@@ -131,6 +123,4 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
             }
         </Flex>
     )
-}).pipe(
-    Memoized.memoized
-) {}
+}) {}

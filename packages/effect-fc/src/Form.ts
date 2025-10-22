@@ -105,7 +105,7 @@ export const make: {
 
 export const run = <A, I, R, SA, SE, SR>(
     self: Form<A, I, R, SA, SE, SR>
-): Effect.Effect<void, never, Scope.Scope | R> => Stream.runForEach(
+): Effect.Effect<void, never, Scope.Scope | R | SR> => Stream.runForEach(
     self.encodedValueRef.changes.pipe(
         Option.isSome(self.debounce) ? Stream.debounce(self.debounce.value) : identity
     ),
@@ -125,21 +125,22 @@ export const run = <A, I, R, SA, SE, SR>(
                             Effect.andThen(SubscriptionRef.set(self.errorRef, Option.none())),
                             Effect.as(Option.some(v)),
                         ),
-                        onFailure: c => Option.match(
-                            Chunk.findFirst(Cause.failures(c), e => e._tag === "ParseError"),
-                            {
-                                onSome: e => Effect.as(SubscriptionRef.set(self.errorRef, Option.some(e)), Option.none()),
-                                onNone: () => Effect.succeed(Option.none()),
-                            },
+                        onFailure: c => Chunk.findFirst(Cause.failures(c), e => e._tag === "ParseError").pipe(
+                            Option.match({
+                                onSome: e => SubscriptionRef.set(self.errorRef, Option.some(e)),
+                                onNone: () => Effect.void,
+                            }),
+                            Effect.as(Option.none<A>()),
                         ),
                     }),
                     Effect.uninterruptible,
                 )),
+                Effect.scoped,
+
                 Effect.andThen(value => Option.isSome(value) && self.autosubmit
-                    ?
+                    ? Effect.asVoid(Effect.forkScoped(submit(self)))
                     : Effect.void
                 ),
-                Effect.scoped,
                 Effect.forkScoped,
             )
         ),
@@ -175,7 +176,7 @@ export namespace service {
 
 export const service = <A, I = A, R = never, SA = void, SE = A, SR = never>(
     options: service.Options<A, I, R, SA, SE, SR>
-): Effect.Effect<Form<A, I, R, SA, SE, SR>, never, Scope.Scope | R> => Effect.tap(
+): Effect.Effect<Form<A, I, R, SA, SE, SR>, never, Scope.Scope | R | SR> => Effect.tap(
     make(options),
     form => Effect.forkScoped(run(form)),
 )
