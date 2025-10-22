@@ -13,7 +13,6 @@ import { Route as FormRouteImport } from './routes/form'
 import { Route as BlankRouteImport } from './routes/blank'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DevMemoRouteImport } from './routes/dev/memo'
-import { Route as DevInputRouteImport } from './routes/dev/input'
 import { Route as DevAsyncRenderingRouteImport } from './routes/dev/async-rendering'
 
 const FormRoute = FormRouteImport.update({
@@ -36,11 +35,6 @@ const DevMemoRoute = DevMemoRouteImport.update({
   path: '/dev/memo',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DevInputRoute = DevInputRouteImport.update({
-  id: '/dev/input',
-  path: '/dev/input',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DevAsyncRenderingRoute = DevAsyncRenderingRouteImport.update({
   id: '/dev/async-rendering',
   path: '/dev/async-rendering',
@@ -52,7 +46,6 @@ export interface FileRoutesByFullPath {
   '/blank': typeof BlankRoute
   '/form': typeof FormRoute
   '/dev/async-rendering': typeof DevAsyncRenderingRoute
-  '/dev/input': typeof DevInputRoute
   '/dev/memo': typeof DevMemoRoute
 }
 export interface FileRoutesByTo {
@@ -60,7 +53,6 @@ export interface FileRoutesByTo {
   '/blank': typeof BlankRoute
   '/form': typeof FormRoute
   '/dev/async-rendering': typeof DevAsyncRenderingRoute
-  '/dev/input': typeof DevInputRoute
   '/dev/memo': typeof DevMemoRoute
 }
 export interface FileRoutesById {
@@ -69,33 +61,19 @@ export interface FileRoutesById {
   '/blank': typeof BlankRoute
   '/form': typeof FormRoute
   '/dev/async-rendering': typeof DevAsyncRenderingRoute
-  '/dev/input': typeof DevInputRoute
   '/dev/memo': typeof DevMemoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/blank'
-    | '/form'
-    | '/dev/async-rendering'
-    | '/dev/input'
-    | '/dev/memo'
+  fullPaths: '/' | '/blank' | '/form' | '/dev/async-rendering' | '/dev/memo'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/blank'
-    | '/form'
-    | '/dev/async-rendering'
-    | '/dev/input'
-    | '/dev/memo'
+  to: '/' | '/blank' | '/form' | '/dev/async-rendering' | '/dev/memo'
   id:
     | '__root__'
     | '/'
     | '/blank'
     | '/form'
     | '/dev/async-rendering'
-    | '/dev/input'
     | '/dev/memo'
   fileRoutesById: FileRoutesById
 }
@@ -104,7 +82,6 @@ export interface RootRouteChildren {
   BlankRoute: typeof BlankRoute
   FormRoute: typeof FormRoute
   DevAsyncRenderingRoute: typeof DevAsyncRenderingRoute
-  DevInputRoute: typeof DevInputRoute
   DevMemoRoute: typeof DevMemoRoute
 }
 
@@ -138,13 +115,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevMemoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dev/input': {
-      id: '/dev/input'
-      path: '/dev/input'
-      fullPath: '/dev/input'
-      preLoaderRoute: typeof DevInputRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/dev/async-rendering': {
       id: '/dev/async-rendering'
       path: '/dev/async-rendering'
@@ -160,7 +130,6 @@ const rootRouteChildren: RootRouteChildren = {
   BlankRoute: BlankRoute,
   FormRoute: FormRoute,
   DevAsyncRenderingRoute: DevAsyncRenderingRoute,
-  DevInputRoute: DevInputRoute,
   DevMemoRoute: DevMemoRoute,
 }
 export const routeTree = rootRouteImport

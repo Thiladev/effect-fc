@@ -95,7 +95,7 @@ const ComponentProto = Object.freeze({
 } as const)
 
 const defaultOptions = {
-    finalizerExecutionMode: "sync",
+    finalizerExecutionMode: "fork",
     finalizerExecutionStrategy: ExecutionStrategy.sequential,
 } as const
 
