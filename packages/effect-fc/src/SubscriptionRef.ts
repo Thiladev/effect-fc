@@ -31,16 +31,17 @@ export const useSubscriptionRefState: {
 export const useSubscriptionRefFromState: {
     <A>(state: readonly [A, React.Dispatch<React.SetStateAction<A>>]): Effect.Effect<SubscriptionRef.SubscriptionRef<A>, never, Scope.Scope>
 } = Effect.fnUntraced(function*([value, setValue]) {
-    const ref = yield* Component.useOnMount(() => SubscriptionRef.make(value))
-
-    yield* Component.useReactEffect(() => Effect.forkScoped(
-        Stream.runForEach(
-            Stream.changesWith(ref.changes, Equivalence.strict()),
-            v => Effect.sync(() => setValue(v)),
-        )
+    const ref = yield* Component.useOnChange(() => Effect.tap(
+        SubscriptionRef.make(value),
+        ref => Effect.forkScoped(
+            Stream.runForEach(
+                Stream.changesWith(ref.changes, Equivalence.strict()),
+                v => Effect.sync(() => setValue(v)),
+            )
+        ),
     ), [setValue])
-    yield* Component.useReactEffect(() => Ref.set(ref, value), [value])
 
+    yield* Component.useReactEffect(() => Ref.set(ref, value), [value])
     return ref
 })
 
