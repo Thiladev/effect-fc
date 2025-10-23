@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: {} is the default type for React props */
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
-import { Context, Effect, Effectable, ExecutionStrategy, Exit, Fiber, Function, HashMap, Layer, ManagedRuntime, Option, Predicate, Ref, Runtime, Scope, Tracer, type Types, type Utils } from "effect"
+import { Context, Effect, Effectable, Equivalence, ExecutionStrategy, Exit, Fiber, Function, HashMap, Layer, ManagedRuntime, Option, Predicate, Ref, Runtime, Scope, Tracer, type Types, type Utils } from "effect"
 import * as React from "react"
 import { Memoized } from "./index.js"
 
@@ -61,14 +61,16 @@ const ComponentProto = Object.freeze({
         const runtimeRef = React.useRef<Runtime.Runtime<Exclude<R, Scope.Scope>>>(null!)
         runtimeRef.current = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
 
-        return React.useMemo(() => {
-            const f: React.FC<P> = this.makeFunctionComponent(runtimeRef)
-            f.displayName = this.displayName ?? "Anonymous"
-            return Memoized.isMemoized(this)
-                ? React.memo(f, this.propsAreEqual)
-                : f
-        // biome-ignore lint/correctness/useExhaustiveDependencies: Effect context comparison
-        }, Array.from(
+        return yield* React.useState(() => Runtime.runSync(runtimeRef.current)(Effect.cachedFunction(
+            (_services: readonly any[]) => Effect.sync(() => {
+                const f: React.FC<P> = this.makeFunctionComponent(runtimeRef)
+                f.displayName = this.displayName ?? "Anonymous"
+                return Memoized.isMemoized(this)
+                    ? React.memo(f, this.propsAreEqual)
+                    : f
+            }),
+            Equivalence.array(Equivalence.strict()),
+        )))[0](Array.from(
             Context.omit(...nonReactiveTags)(runtimeRef.current.context).unsafeMap.values()
         ))
     }),
@@ -406,11 +408,7 @@ export const withRuntime: {
 
 
 export class ScopeMap extends Effect.Service<ScopeMap>()("effect-fc/Component/ScopeMap", {
-    effect: Effect.bind(
-        Effect.Do,
-        "ref",
-        () => Ref.make(HashMap.empty<string, ScopeMap.Entry>()),
-    ),
+    effect: Effect.bind(Effect.Do, "ref", () => Ref.make(HashMap.empty<string, ScopeMap.Entry>()))
 }) {}
 
 export namespace ScopeMap {

@@ -11,7 +11,7 @@ const TodosStateLive = TodosState.Default("todos")
 const Index = Component.makeUntraced("Index")(function*() {
     const TodosFC = yield* Effect.provide(
         Todos,
-        yield* Component.useContext(TodosStateLive, { finalizerExecutionMode: "fork" }),
+        yield* Component.useContext(TodosStateLive),
     )
 
     return <TodosFC />
