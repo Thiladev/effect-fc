@@ -11,10 +11,12 @@ export const useSubscriptionRefState: {
 } = Effect.fnUntraced(function* <A>(ref: SubscriptionRef.SubscriptionRef<A>) {
     const [reactStateValue, setReactStateValue] = React.useState(yield* Component.useOnMount(() => ref))
 
-    yield* Component.useOnChange(() => Effect.forkScoped(Stream.runForEach(
-        Stream.changesWith(ref.changes, Equivalence.strict()),
-        v => Effect.sync(() => setReactStateValue(v)),
-    )), [ref])
+    yield* Component.useReactEffect(() => Effect.forkScoped(
+        Stream.runForEach(
+            Stream.changesWith(ref.changes, Equivalence.strict()),
+            v => Effect.sync(() => setReactStateValue(v)),
+        )
+    ), [ref], { finalizerExecutionMode: "fork" })
 
     const setValue = yield* Component.useCallbackSync((setStateAction: React.SetStateAction<A>) =>
         Effect.andThen(
@@ -31,10 +33,12 @@ export const useSubscriptionRefFromState: {
 } = Effect.fnUntraced(function*([value, setValue]) {
     const ref = yield* Component.useOnMount(() => SubscriptionRef.make(value))
 
-    yield* Component.useOnChange(() => Effect.forkScoped(Stream.runForEach(
-        Stream.changesWith(ref.changes, Equivalence.strict()),
-        v => Effect.sync(() => setValue(v)),
-    )), [setValue])
+    yield* Component.useReactEffect(() => Effect.forkScoped(
+        Stream.runForEach(
+            Stream.changesWith(ref.changes, Equivalence.strict()),
+            v => Effect.sync(() => setValue(v)),
+        )
+    ), [setValue], { finalizerExecutionMode: "fork" })
     yield* Component.useReactEffect(() => Ref.set(ref, value), [value])
 
     return ref

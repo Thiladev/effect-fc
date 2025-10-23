@@ -33,13 +33,13 @@ export const useSubscribables: {
         yield* Component.useOnMount(() => Effect.all(elements.map(v => v.get)))
     )
 
-    yield* Component.useOnChange(() => Effect.forkScoped(pipe(
+    yield* Component.useReactEffect(() => Effect.forkScoped(pipe(
         elements.map(ref => Stream.changesWith(ref.changes, Equivalence.strict())),
         streams => Stream.zipLatestAll(...streams),
         Stream.runForEach(v =>
             Effect.sync(() => setReactStateValue(v))
         ),
-    )), elements)
+    )), elements, { finalizerExecutionMode: "fork" })
 
     return reactStateValue as any
 })
