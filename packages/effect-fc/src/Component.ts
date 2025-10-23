@@ -489,18 +489,28 @@ export const useOnMount: {
     return yield* React.useState(() => Runtime.runSync(runtime)(Effect.cached(f())))[0]
 })
 
+export namespace useOnChange {
+    export type Options = useScope.Options
+}
+
 export const useOnChange: {
     <A, E, R>(
         f: () => Effect.Effect<A, E, R>,
         deps: React.DependencyList,
-    ): Effect.Effect<A, E, R>
+        options?: useOnChange.Options,
+    ): Effect.Effect<A, E, Exclude<R, Scope.Scope>>
 } = Effect.fnUntraced(function* <A, E, R>(
     f: () => Effect.Effect<A, E, R>,
     deps: React.DependencyList,
+    options?: useOnChange.Options,
 ) {
-    const runtime = yield* Effect.runtime<R>()
-    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
-    return yield* React.useMemo(() => Runtime.runSync(runtime)(Effect.cached(f())), deps)
+    const runtime = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
+    const scope = yield* useScope(deps, options)
+
+    // biome-ignore lint/correctness/useExhaustiveDependencies: only reactive on "scope"
+    return yield* React.useMemo(() => Runtime.runSync(runtime)(
+        Effect.cached(Effect.provideService(f(), Scope.Scope, scope))
+    ), [scope])
 })
 
 export namespace useReactEffect {
