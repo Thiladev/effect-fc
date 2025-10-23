@@ -25,8 +25,7 @@ extends
 
     /** @internal */
     makeFunctionComponent(
-        runtimeRef: React.Ref<Runtime.Runtime<Exclude<R, Scope.Scope>>>,
-        scope: Scope.Scope,
+        runtimeRef: React.Ref<Runtime.Runtime<Exclude<R, Scope.Scope>>>
     ): (props: P) => A
 }
 
@@ -58,38 +57,31 @@ const ComponentProto = Object.freeze({
     commit: Effect.fnUntraced(function* <P extends {}, A extends React.ReactNode, E, R>(
         this: Component<P, A, E, R>
     ) {
-        const self = this
         // biome-ignore lint/style/noNonNullAssertion: React ref initialization
         const runtimeRef = React.useRef<Runtime.Runtime<Exclude<R, Scope.Scope>>>(null!)
         runtimeRef.current = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
 
-        return React.useRef(function ScopeProvider(props: P) {
-            const scope = Runtime.runSync(runtimeRef.current)(useScope(
-                Array.from(
-                    Context.omit(...nonReactiveTags)(runtimeRef.current.context).unsafeMap.values()
-                ),
-                self,
-            ))
-
-            const FC = React.useMemo(() => {
-                const f: React.FC<P> = self.makeFunctionComponent(runtimeRef, scope)
-                f.displayName = self.displayName ?? "Anonymous"
-                return Memoized.isMemoized(self)
-                    ? React.memo(f, self.propsAreEqual)
-                    : f
-            }, [scope])
-
-            return React.createElement(FC, props)
-        }).current
+        return React.useMemo(() => {
+            const f: React.FC<P> = this.makeFunctionComponent(runtimeRef)
+            f.displayName = this.displayName ?? "Anonymous"
+            return Memoized.isMemoized(this)
+                ? React.memo(f, this.propsAreEqual)
+                : f
+        // biome-ignore lint/correctness/useExhaustiveDependencies: Effect context comparison
+        }, Array.from(
+            Context.omit(...nonReactiveTags)(runtimeRef.current.context).unsafeMap.values()
+        ))
     }),
 
     makeFunctionComponent<P extends {}, A extends React.ReactNode, E, R>(
         this: Component<P, A, E, R>,
         runtimeRef: React.RefObject<Runtime.Runtime<Exclude<R, Scope.Scope>>>,
-        scope: Scope.Scope,
     ) {
         return (props: P) => Runtime.runSync(runtimeRef.current)(
-            Effect.provideService(this.body(props), Scope.Scope, scope)
+            Effect.andThen(
+                useScope([], this),
+                scope => Effect.provideService(this.body(props), Scope.Scope, scope),
+            )
         )
     },
 } as const)
