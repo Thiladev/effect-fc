@@ -5,7 +5,7 @@ import * as React from "react"
 import { Memoized } from "./index.js"
 
 
-export const TypeId: unique symbol = Symbol.for("effect-fc/Component")
+export const TypeId: unique symbol = Symbol.for("effect-fc/Component/Component")
 export type TypeId = typeof TypeId
 
 export interface Component<P extends {}, A extends React.ReactNode, E, R>
@@ -60,8 +60,8 @@ const ComponentProto = Object.freeze({
     ) {
         const self = this
         // biome-ignore lint/style/noNonNullAssertion: React ref initialization
-        const runtimeRef = React.useRef<Runtime.Runtime<ComponentScopeMap | Exclude<R, Scope.Scope>>>(null!)
-        runtimeRef.current = yield* Effect.runtime<ComponentScopeMap | Exclude<R, Scope.Scope>>()
+        const runtimeRef = React.useRef<Runtime.Runtime<Exclude<R, Scope.Scope>>>(null!)
+        runtimeRef.current = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
 
         return React.useRef(function ScopeProvider(props: P) {
             const scope = Runtime.runSync(runtimeRef.current)(useScope(
@@ -433,14 +433,14 @@ export const useScope: {
     (
         deps: React.DependencyList,
         options?: ScopeOptions,
-    ): Effect.Effect<Scope.Scope, never, ComponentScopeMap>
+    ): Effect.Effect<Scope.Scope>
 } = Effect.fnUntraced(function*(deps, options) {
     // biome-ignore lint/style/noNonNullAssertion: context initialization
     const runtimeRef = React.useRef<Runtime.Runtime<never>>(null!)
     runtimeRef.current = yield* Effect.runtime()
 
     const key = React.useId()
-    const scopeMap = yield* ComponentScopeMap
+    const scopeMap = yield* ComponentScopeMap as unknown as Effect.Effect<ComponentScopeMap>
 
     const scope = React.useMemo(() => Runtime.runSync(runtimeRef.current)(Effect.andThen(
         scopeMap.ref,
@@ -610,7 +610,7 @@ export const useContext: {
     <ROut, E, RIn>(
         layer: Layer.Layer<ROut, E, RIn>,
         options?: ScopeOptions,
-    ): Effect.Effect<Context.Context<ROut>, E, RIn | ComponentScopeMap>
+    ): Effect.Effect<Context.Context<ROut>, E, RIn>
 } = Effect.fnUntraced(function* <ROut, E, RIn>(
     layer: Layer.Layer<ROut, E, RIn>,
     options?: ScopeOptions,
