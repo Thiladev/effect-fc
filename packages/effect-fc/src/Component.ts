@@ -408,7 +408,7 @@ export const withRuntime: {
 
 
 export class ScopeMap extends Effect.Service<ScopeMap>()("effect-fc/Component/ScopeMap", {
-    effect: Effect.bind(Effect.Do, "ref", () => Ref.make(HashMap.empty<string, ScopeMap.Entry>()))
+    effect: Effect.bind(Effect.Do, "ref", () => Ref.make(HashMap.empty<object, ScopeMap.Entry>()))
 }) {}
 
 export namespace ScopeMap {
@@ -429,25 +429,27 @@ export const useScope: {
     const runtimeRef = React.useRef<Runtime.Runtime<never>>(null!)
     runtimeRef.current = yield* Effect.runtime()
 
-    const key = React.useId()
     const scopeMap = yield* ScopeMap as unknown as Effect.Effect<ScopeMap>
 
-    const scope = React.useMemo(() => Runtime.runSync(runtimeRef.current)(Effect.andThen(
-        scopeMap.ref,
-        map => Option.match(HashMap.get(map, key), {
-            onSome: entry => Effect.succeed(entry.scope),
-            onNone: () => Effect.tap(
-                Scope.make(options?.finalizerExecutionStrategy ?? ExecutionStrategy.sequential),
-                scope => Ref.update(scopeMap.ref, HashMap.set(key, {
-                    scope,
-                    closeFiber: Option.none(),
-                }))
-            ),
-        }),
+    const [key, scope] = React.useMemo(() => Runtime.runSync(runtimeRef.current)(Effect.andThen(
+        Effect.all([Effect.succeed({}), scopeMap.ref]),
+        ([key, map]) => Effect.andThen(
+            Option.match(HashMap.get(map, key), {
+                onSome: entry => Effect.succeed(entry.scope),
+                onNone: () => Effect.tap(
+                    Scope.make(options?.finalizerExecutionStrategy ?? ExecutionStrategy.sequential),
+                    scope => Ref.update(scopeMap.ref, HashMap.set(key, {
+                        scope,
+                        closeFiber: Option.none(),
+                    }))
+                ),
+            }),
+            scope => [key, scope] as const,
+        ),
     // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
     )), deps)
 
-    // biome-ignore lint/correctness/useExhaustiveDependencies: only reactive on "scope"
+    // biome-ignore lint/correctness/useExhaustiveDependencies: only reactive on "key"
     React.useEffect(() => Runtime.runSync(runtimeRef.current)(scopeMap.ref.pipe(
         Effect.andThen(HashMap.get(key)),
         Effect.tap(entry => Option.match(entry.closeFiber, {
@@ -469,7 +471,7 @@ export const useScope: {
                 })),
             ))
         ),
-    )), [scope])
+    )), [key])
 
     return scope
 })
