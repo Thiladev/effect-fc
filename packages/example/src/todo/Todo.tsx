@@ -41,7 +41,7 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
         completedAtField,
     ] = yield* Component.useOnChange(() => Effect.gen(function*() {
         const indexRef = Match.value(props).pipe(
-            Match.tag("new", () => Subscribable.make({ get: Effect.succeed(-1), changes: Stream.empty })),
+            Match.tag("new", () => Subscribable.make({ get: Effect.succeed(-1), changes: Stream.make(-1) })),
             Match.tag("edit", ({ id }) => state.getIndexSubscribable(id)),
             Match.exhaustive,
         )
@@ -78,7 +78,11 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
         ] as const
     }), [props._tag, props._tag === "edit" ? props.id : undefined])
 
-    const [index, size, canSubmit] = yield* Subscribable.useSubscribables(indexRef, state.sizeSubscribable, form.canSubmitSubscribable)
+    const [index, size, canSubmit] = yield* Subscribable.useSubscribables(
+        indexRef,
+        state.sizeSubscribable,
+        form.canSubmitSubscribable,
+    )
     const submit = yield* Form.useSubmit(form)
     const TextFieldFormInputFC = yield* TextFieldFormInput
 
