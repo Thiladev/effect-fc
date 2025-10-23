@@ -1,7 +1,6 @@
 export * as Async from "./Async.js"
 export * as Component from "./Component.js"
 export * as Form from "./Form.js"
-export * as Hooks from "./Hooks/index.js"
 export * as Memoized from "./Memoized.js"
 export * as PropertyPath from "./PropertyPath.js"
 export * as ReactRuntime from "./ReactRuntime.js"
