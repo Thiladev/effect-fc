@@ -2,7 +2,7 @@ import { Flex, Text, TextField } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
 import { GetRandomValues, makeUuid4 } from "@typed/id"
 import { Effect } from "effect"
-import { Async, Component, Hooks, Memoized } from "effect-fc"
+import { Async, Component, Memoized } from "effect-fc"
 import * as React from "react"
 import { runtime } from "@/runtime"
 
@@ -69,7 +69,7 @@ class AsyncComponent extends Component.makeUntraced("AsyncComponent")(function*(
 class MemoizedAsyncComponent extends Memoized.memoized(AsyncComponent) {}
 
 class SubComponent extends Component.makeUntraced("SubComponent")(function*() {
-    const [state] = React.useState(yield* Hooks.useOnce(() => Effect.provide(makeUuid4, GetRandomValues.CryptoRandom)))
+    const [state] = React.useState(yield* Component.useOnMount(() => Effect.provide(makeUuid4, GetRandomValues.CryptoRandom)))
     return <Text>{state}</Text>
 }) {}
 

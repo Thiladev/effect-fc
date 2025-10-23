@@ -1,10 +1,10 @@
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
 import { Effect, Function, Predicate, Runtime, Scope } from "effect"
 import * as React from "react"
-import type * as Component from "./Component.js"
+import * as Component from "./Component.js"
 
 
-export const TypeId: unique symbol = Symbol.for("effect-fc/Async")
+export const TypeId: unique symbol = Symbol.for("@effect-fc/Async/Async")
 export type TypeId = typeof TypeId
 
 export interface Async extends Async.Options {
@@ -26,13 +26,15 @@ const SuspenseProto = Object.freeze({
     makeFunctionComponent<P extends {}, A extends React.ReactNode, E, R>(
         this: Component.Component<P, A, E, R> & Async,
         runtimeRef: React.RefObject<Runtime.Runtime<Exclude<R, Scope.Scope>>>,
-        scope: Scope.Scope,
     ) {
         const SuspenseInner = (props: { readonly promise: Promise<React.ReactNode> }) => React.use(props.promise)
 
         return ({ fallback, name, ...props }: Async.Props) => {
             const promise = Runtime.runPromise(runtimeRef.current)(
-                Effect.provideService(this.body(props as P), Scope.Scope, scope)
+                Effect.andThen(
+                    Component.useScope([], this),
+                    scope => Effect.provideService(this.body(props as P), Scope.Scope, scope),
+                )
             )
 
             return React.createElement(

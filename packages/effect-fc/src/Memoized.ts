@@ -3,7 +3,7 @@ import { type Equivalence, Function, Predicate } from "effect"
 import type * as Component from "./Component.js"
 
 
-export const TypeId: unique symbol = Symbol.for("effect-fc/Memoized")
+export const TypeId: unique symbol = Symbol.for("@effect-fc/Memoized/Memoized")
 export type TypeId = typeof TypeId
 
 export interface Memoized<P> extends Memoized.Options<P> {

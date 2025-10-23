@@ -1,5 +1,5 @@
-import { assertEncodedJsonifiable } from "@/lib/schema"
 import { Schema } from "effect"
+import { assertEncodedJsonifiable } from "@/lib/schema"
 
 
 export class Todo extends Schema.Class<Todo>("Todo")({
