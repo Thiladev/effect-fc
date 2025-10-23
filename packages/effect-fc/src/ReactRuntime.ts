@@ -22,10 +22,10 @@ export const isReactRuntime = (u: unknown): u is ReactRuntime<unknown, unknown> 
 export const make = <R, ER>(
     layer: Layer.Layer<R, ER>,
     memoMap?: Layer.MemoMap,
-): ReactRuntime<R | Component.ComponentScopeMap, ER> => Object.setPrototypeOf(
+): ReactRuntime<R | Component.ScopeMap, ER> => Object.setPrototypeOf(
     Object.assign(function() {}, {
         runtime: ManagedRuntime.make(
-            Layer.merge(layer, Component.ComponentScopeMap.Default),
+            Layer.merge(layer, Component.ScopeMap.Default),
             memoMap,
         ),
         // biome-ignore lint/style/noNonNullAssertion: context initialization

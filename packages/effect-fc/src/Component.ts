@@ -405,15 +405,15 @@ export const withRuntime: {
 })
 
 
-export class ComponentScopeMap extends Effect.Service<ComponentScopeMap>()("effect-fc/Component/ComponentScopeMap", {
+export class ScopeMap extends Effect.Service<ScopeMap>()("effect-fc/Component/ScopeMap", {
     effect: Effect.bind(
         Effect.Do,
         "ref",
-        () => Ref.make(HashMap.empty<string, ComponentScopeMap.Entry>()),
+        () => Ref.make(HashMap.empty<string, ScopeMap.Entry>()),
     ),
 }) {}
 
-export namespace ComponentScopeMap {
+export namespace ScopeMap {
     export interface Entry {
         readonly scope: Scope.CloseableScope
         readonly closeFiber: Option.Option<Fiber.RuntimeFiber<void>>
@@ -432,7 +432,7 @@ export const useScope: {
     runtimeRef.current = yield* Effect.runtime()
 
     const key = React.useId()
-    const scopeMap = yield* ComponentScopeMap as unknown as Effect.Effect<ComponentScopeMap>
+    const scopeMap = yield* ScopeMap as unknown as Effect.Effect<ScopeMap>
 
     const scope = React.useMemo(() => Runtime.runSync(runtimeRef.current)(Effect.andThen(
         scopeMap.ref,
