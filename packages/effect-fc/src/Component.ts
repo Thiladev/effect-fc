@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: {} is the default type for React props */
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
-import { Context, Effect, Effectable, Equivalence, ExecutionStrategy, Exit, Fiber, Function, HashMap, Layer, ManagedRuntime, Option, Predicate, Ref, Runtime, Scope, Tracer, type Types, type Utils } from "effect"
+import { Context, type Duration, Effect, Effectable, Equivalence, ExecutionStrategy, Exit, Fiber, Function, HashMap, Layer, ManagedRuntime, Option, Predicate, Ref, Runtime, Scope, Tracer, type Types, type Utils } from "effect"
 import * as React from "react"
 import { Memoized } from "./index.js"
 
@@ -40,6 +40,7 @@ export namespace Component {
     export interface Options {
         readonly displayName?: string
         readonly finalizerExecutionStrategy: ExecutionStrategy.ExecutionStrategy
+        readonly finalizerExecutionDebounce: Duration.DurationInput
     }
 }
 
@@ -84,6 +85,7 @@ const ComponentProto = Object.freeze({
 
 const defaultOptions: Component.Options = {
     finalizerExecutionStrategy: ExecutionStrategy.sequential,
+    finalizerExecutionDebounce: "100 millis",
 }
 
 const nonReactiveTags = [Tracer.ParentSpan] as const
@@ -415,6 +417,7 @@ export namespace ScopeMap {
 export namespace useScope {
     export interface Options {
         readonly finalizerExecutionStrategy?: ExecutionStrategy.ExecutionStrategy
+        readonly finalizerExecutionDebounce?: Duration.DurationInput
     }
 }
 
@@ -436,7 +439,7 @@ export const useScope: {
             Option.match(HashMap.get(map, key), {
                 onSome: entry => Effect.succeed(entry.scope),
                 onNone: () => Effect.tap(
-                    Scope.make(options?.finalizerExecutionStrategy ?? ExecutionStrategy.sequential),
+                    Scope.make(options?.finalizerExecutionStrategy ?? defaultOptions.finalizerExecutionStrategy),
                     scope => Ref.update(scopeMap.ref, HashMap.set(key, {
                         scope,
                         closeFiber: Option.none(),
@@ -460,7 +463,7 @@ export const useScope: {
         })),
         Effect.map(({ scope }) =>
             () => Runtime.runSync(runtimeRef.current)(Effect.andThen(
-                Effect.forkDaemon(Effect.sleep("100 millis").pipe(
+                Effect.forkDaemon(Effect.sleep(options?.finalizerExecutionDebounce ?? defaultOptions.finalizerExecutionDebounce).pipe(
                     Effect.andThen(Scope.close(scope, Exit.void)),
                     Effect.andThen(Ref.update(scopeMap.ref, HashMap.remove(key))),
                 )),
@@ -528,7 +531,7 @@ const runReactEffect = <E, R>(
     f: () => Effect.Effect<void, E, R>,
     options?: useReactEffect.Options,
 ) => Effect.Do.pipe(
-    Effect.bind("scope", () => Scope.make(options?.finalizerExecutionStrategy ?? ExecutionStrategy.sequential)),
+    Effect.bind("scope", () => Scope.make(options?.finalizerExecutionStrategy ?? defaultOptions.finalizerExecutionStrategy)),
     Effect.bind("exit", ({ scope }) => Effect.exit(Effect.provideService(f(), Scope.Scope, scope))),
     Effect.map(({ scope }) =>
         () => {
