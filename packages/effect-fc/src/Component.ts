@@ -469,9 +469,9 @@ export const useScope: {
         })),
         Effect.map(({ scope }) =>
             () => Runtime.runSync(runtimeRef.current)(Effect.andThen(
-                Effect.forkDaemon(Effect.andThen(
-                    Effect.sleep("100 millis"),
-                    Scope.close(scope, Exit.void),
+                Effect.forkDaemon(Effect.sleep("100 millis").pipe(
+                    Effect.andThen(Scope.close(scope, Exit.void)),
+                    Effect.andThen(Ref.update(scopeMap.ref, HashMap.remove(key))),
                 )),
                 fiber => Ref.update(scopeMap.ref, HashMap.set(key, {
                     scope,
