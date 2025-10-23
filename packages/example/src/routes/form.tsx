@@ -54,6 +54,11 @@ class RegisterFormView extends Component.makeUntraced("RegisterFormView")(functi
 
     const TextFieldFormInputFC = yield* TextFieldFormInput
 
+    yield* Component.useOnMount(() => Effect.gen(function*() {
+        yield* Effect.addFinalizer(() => Console.log("RegisterFormView unmounted"))
+        yield* Console.log("RegisterFormView mounted")
+    }))
+
 
     return (
         <Container width="300">

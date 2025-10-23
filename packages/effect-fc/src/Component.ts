@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: {} is the default type for React props */
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
-import { Context, Effect, Effectable, ExecutionStrategy, Exit, Function, Layer, ManagedRuntime, Predicate, Ref, Runtime, Scope, Tracer, type Types, type Utils } from "effect"
+import { Context, Effect, Effectable, ExecutionStrategy, Exit, Fiber, Function, HashMap, Layer, ManagedRuntime, Option, Predicate, Ref, Runtime, Scope, Tracer, type Types, type Utils } from "effect"
 import * as React from "react"
 import { Memoized } from "./index.js"
 
@@ -60,8 +60,8 @@ const ComponentProto = Object.freeze({
     ) {
         const self = this
         // biome-ignore lint/style/noNonNullAssertion: React ref initialization
-        const runtimeRef = React.useRef<Runtime.Runtime<Exclude<R, Scope.Scope>>>(null!)
-        runtimeRef.current = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
+        const runtimeRef = React.useRef<Runtime.Runtime<ComponentScopeMap | Exclude<R, Scope.Scope>>>(null!)
+        runtimeRef.current = yield* Effect.runtime<ComponentScopeMap | Exclude<R, Scope.Scope>>()
 
         return React.useRef(function ScopeProvider(props: P) {
             const scope = Runtime.runSync(runtimeRef.current)(useScope(
@@ -413,35 +413,73 @@ export const withRuntime: {
 })
 
 
+export class ComponentScopeMap extends Effect.Service<ComponentScopeMap>()("effect-fc/Component/ComponentScopeMap", {
+    effect: Effect.bind(
+        Effect.Do,
+        "ref",
+        () => Ref.make(HashMap.empty<string, ComponentScopeMap.Entry>()),
+    ),
+}) {}
+
+export namespace ComponentScopeMap {
+    export interface Entry {
+        readonly scope: Scope.CloseableScope
+        readonly closeFiber: Option.Option<Fiber.RuntimeFiber<void>>
+    }
+}
+
+
 export const useScope: {
     (
         deps: React.DependencyList,
         options?: ScopeOptions,
-    ): Effect.Effect<Scope.Scope>
+    ): Effect.Effect<Scope.Scope, never, ComponentScopeMap>
 } = Effect.fnUntraced(function*(deps, options) {
-    const runtime = yield* Effect.runtime()
+    // biome-ignore lint/style/noNonNullAssertion: context initialization
+    const runtimeRef = React.useRef<Runtime.Runtime<never>>(null!)
+    runtimeRef.current = yield* Effect.runtime()
 
-    // biome-ignore lint/correctness/useExhaustiveDependencies: no reactivity needed
-    const [isInitialRun, initialScope] = React.useMemo(() => Runtime.runSync(runtime)(Effect.all([
-        Ref.make(true),
-        Scope.make(options?.finalizerExecutionStrategy ?? ExecutionStrategy.sequential),
-    ])), [])
-    const [scope, setScope] = React.useState(initialScope)
+    const key = React.useId()
+    const scopeMap = yield* ComponentScopeMap
 
-    React.useEffect(() => Runtime.runSync(runtime)(
-        Effect.if(isInitialRun, {
-            onTrue: () => Effect.as(
-                Ref.set(isInitialRun, false),
-                () => closeScope(scope, runtime, options),
+    const scope = React.useMemo(() => Runtime.runSync(runtimeRef.current)(Effect.andThen(
+        scopeMap.ref,
+        map => Option.match(HashMap.get(map, key), {
+            onSome: entry => Effect.succeed(entry.scope),
+            onNone: () => Effect.tap(
+                Scope.make(options?.finalizerExecutionStrategy ?? ExecutionStrategy.sequential),
+                scope => Ref.update(scopeMap.ref, HashMap.set(key, {
+                    scope,
+                    closeFiber: Option.none(),
+                }))
             ),
-
-            onFalse: () => Scope.make(options?.finalizerExecutionStrategy ?? ExecutionStrategy.sequential).pipe(
-                Effect.tap(scope => Effect.sync(() => setScope(scope))),
-                Effect.map(scope => () => closeScope(scope, runtime, options)),
-            ),
-        })
+        }),
     // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
-    ), deps)
+    )), deps)
+
+    // biome-ignore lint/correctness/useExhaustiveDependencies: only reactive on "scope"
+    React.useEffect(() => Runtime.runSync(runtimeRef.current)(scopeMap.ref.pipe(
+        Effect.andThen(HashMap.get(key)),
+        Effect.tap(entry => Option.match(entry.closeFiber, {
+            onSome: fiber => Effect.andThen(
+                Ref.update(scopeMap.ref, HashMap.set(key, { ...entry, closeFiber: Option.none() })),
+                Fiber.interruptFork(fiber),
+            ),
+            onNone: () => Effect.void,
+        })),
+        Effect.map(({ scope }) =>
+            () => Runtime.runSync(runtimeRef.current)(Effect.andThen(
+                Effect.forkDaemon(Effect.andThen(
+                    Effect.sleep("100 millis"),
+                    Scope.close(scope, Exit.void),
+                )),
+                fiber => Ref.update(scopeMap.ref, HashMap.set(key, {
+                    scope,
+                    closeFiber: Option.some(fiber),
+                })),
+            ))
+        ),
+    )), [scope])
 
     return scope
 })
@@ -572,7 +610,7 @@ export const useContext: {
     <ROut, E, RIn>(
         layer: Layer.Layer<ROut, E, RIn>,
         options?: ScopeOptions,
-    ): Effect.Effect<Context.Context<ROut>, E, RIn>
+    ): Effect.Effect<Context.Context<ROut>, E, RIn | ComponentScopeMap>
 } = Effect.fnUntraced(function* <ROut, E, RIn>(
     layer: Layer.Layer<ROut, E, RIn>,
     options?: ScopeOptions,

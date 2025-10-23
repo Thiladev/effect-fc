@@ -1,6 +1,7 @@
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
-import { Effect, type Layer, ManagedRuntime, Predicate, type Runtime } from "effect"
+import { Effect, Layer, ManagedRuntime, Predicate, type Runtime } from "effect"
 import * as React from "react"
+import * as Component from "./Component.js"
 
 
 export const TypeId: unique symbol = Symbol.for("effect-fc/ReactRuntime")
@@ -21,9 +22,12 @@ export const isReactRuntime = (u: unknown): u is ReactRuntime<unknown, unknown> 
 export const make = <R, ER>(
     layer: Layer.Layer<R, ER>,
     memoMap?: Layer.MemoMap,
-): ReactRuntime<R, ER> => Object.setPrototypeOf(
+): ReactRuntime<R | Component.ComponentScopeMap, ER> => Object.setPrototypeOf(
     Object.assign(function() {}, {
-        runtime: ManagedRuntime.make(layer, memoMap),
+        runtime: ManagedRuntime.make(
+            Layer.merge(layer, Component.ComponentScopeMap.Default),
+            memoMap,
+        ),
         // biome-ignore lint/style/noNonNullAssertion: context initialization
         context: React.createContext<Runtime.Runtime<R>>(null!),
     }),
