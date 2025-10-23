@@ -4,7 +4,7 @@ import * as React from "react"
 import * as Component from "./Component.js"
 
 
-export const TypeId: unique symbol = Symbol.for("effect-fc/ReactRuntime")
+export const TypeId: unique symbol = Symbol.for("effect-fc/ReactRuntime/ReactRuntime")
 export type TypeId = typeof TypeId
 
 export interface ReactRuntime<R, ER> {

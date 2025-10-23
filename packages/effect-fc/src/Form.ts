@@ -9,7 +9,7 @@ import * as SubscriptionRef from "./SubscriptionRef.js"
 import * as SubscriptionSubRef from "./SubscriptionSubRef.js"
 
 
-export const FormTypeId: unique symbol = Symbol.for("effect-fc/Form")
+export const FormTypeId: unique symbol = Symbol.for("effect-fc/Form/Form")
 export type FormTypeId = typeof FormTypeId
 
 export interface Form<in out A, in out I = A, out R = never, in out SA = void, in out SE = A, out SR = never>
