@@ -16,7 +16,7 @@ export const useSubscriptionRefState: {
             Stream.changesWith(ref.changes, Equivalence.strict()),
             v => Effect.sync(() => setReactStateValue(v)),
         )
-    ), [ref], { finalizerExecutionMode: "fork" })
+    ), [ref])
 
     const setValue = yield* Component.useCallbackSync((setStateAction: React.SetStateAction<A>) =>
         Effect.andThen(
@@ -38,7 +38,7 @@ export const useSubscriptionRefFromState: {
             Stream.changesWith(ref.changes, Equivalence.strict()),
             v => Effect.sync(() => setValue(v)),
         )
-    ), [setValue], { finalizerExecutionMode: "fork" })
+    ), [setValue])
     yield* Component.useReactEffect(() => Ref.set(ref, value), [value])
 
     return ref

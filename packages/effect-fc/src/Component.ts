@@ -545,7 +545,7 @@ const runReactEffect = <E, R>(
     Effect.bind("exit", ({ scope }) => Effect.exit(Effect.provideService(f(), Scope.Scope, scope))),
     Effect.map(({ scope }) =>
         () => {
-            switch (options?.finalizerExecutionMode ?? "sync") {
+            switch (options?.finalizerExecutionMode ?? "fork") {
                 case "sync":
                     Runtime.runSync(runtime)(Scope.close(scope, Exit.void))
                     break

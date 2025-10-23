@@ -39,7 +39,7 @@ export const useSubscribables: {
         Stream.runForEach(v =>
             Effect.sync(() => setReactStateValue(v))
         ),
-    )), elements, { finalizerExecutionMode: "fork" })
+    )), elements)
 
     return reactStateValue as any
 })
