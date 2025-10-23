@@ -5,7 +5,7 @@ import * as React from "react"
 import { Memoized } from "./index.js"
 
 
-export const TypeId: unique symbol = Symbol.for("effect-fc/Component/Component")
+export const TypeId: unique symbol = Symbol.for("@effect-fc/Component/Component")
 export type TypeId = typeof TypeId
 
 export interface Component<P extends {}, A extends React.ReactNode, E, R>
