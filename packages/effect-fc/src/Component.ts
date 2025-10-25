@@ -613,25 +613,15 @@ export const useCallbackPromise: {
 })
 
 export namespace useContext {
-    export type Options = useScope.Options
+    export type Options = useOnChange.Options
 }
 
-export const useContext: {
-    <ROut, E, RIn>(
-        layer: Layer.Layer<ROut, E, RIn>,
-        options?: useContext.Options,
-    ): Effect.Effect<Context.Context<ROut>, E, RIn>
-} = Effect.fnUntraced(function* <ROut, E, RIn>(
+export const useContext = <ROut, E, RIn>(
     layer: Layer.Layer<ROut, E, RIn>,
     options?: useContext.Options,
-) {
-    const scope = yield* useScope([layer], options)
-
-    return yield* useOnChange(() => Effect.context<RIn>().pipe(
-        Effect.map(context => ManagedRuntime.make(Layer.provide(layer, Layer.succeedContext(context)))),
-        Effect.tap(runtime => Effect.addFinalizer(() => runtime.disposeEffect)),
-        Effect.andThen(runtime => runtime.runtimeEffect),
-        Effect.andThen(runtime => runtime.context),
-        Effect.provideService(Scope.Scope, scope),
-    ), [scope])
-})
+): Effect.Effect<Context.Context<ROut>, E, RIn> => useOnChange(() => Effect.context<RIn>().pipe(
+    Effect.map(context => ManagedRuntime.make(Layer.provide(layer, Layer.succeedContext(context)))),
+    Effect.tap(runtime => Effect.addFinalizer(() => runtime.disposeEffect)),
+    Effect.andThen(runtime => runtime.runtimeEffect),
+    Effect.andThen(runtime => runtime.context),
+), [layer], options)
