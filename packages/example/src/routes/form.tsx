@@ -1,6 +1,6 @@
-import { Button, Container, Flex } from "@radix-ui/themes"
+import { Button, Container, Flex, Text } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
-import { Console, Effect, Option, ParseResult, Schema } from "effect"
+import { Console, Effect, Match, Option, ParseResult, Schema } from "effect"
 import { Component, Form, Subscribable } from "effect-fc"
 import { TextFieldFormInput } from "@/lib/form/TextFieldFormInput"
 import { DateTimeUtcFromZonedInput } from "@/lib/schema"
@@ -50,7 +50,10 @@ class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
 class RegisterFormView extends Component.makeUntraced("RegisterFormView")(function*() {
     const form = yield* RegisterForm
     const submit = yield* Form.useSubmit(form)
-    const [canSubmit] = yield* Subscribable.useSubscribables(form.canSubmitSubscribable)
+    const [canSubmit, submitResult] = yield* Subscribable.useSubscribables(
+        form.canSubmitSubscribable,
+        form.submitResultRef,
+    )
 
     const TextFieldFormInputFC = yield* TextFieldFormInput
 
@@ -85,6 +88,14 @@ class RegisterFormView extends Component.makeUntraced("RegisterFormView")(functi
                     <Button disabled={!canSubmit}>Submit</Button>
                 </Flex>
             </form>
+
+            {Match.value(submitResult).pipe(
+                Match.tag("Initial", () => <></>),
+                Match.tag("Running", () => <Text>Submitting...</Text>),
+                Match.tag("Success", () => <Text>Submitted successfully!</Text>),
+                Match.tag("Failure", v => <Text>Error: {v.cause.toString()}</Text>),
+                Match.exhaustive,
+            )}
         </Container>
     )
 }) {}

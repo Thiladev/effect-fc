@@ -102,13 +102,14 @@ export const isSuccess = (u: unknown): u is Success<unknown> => isResult(u) && u
 export const isFailure = (u: unknown): u is Failure<unknown, unknown> => isResult(u) && u._tag === "Failure"
 export const isRefreshing = (u: unknown): u is Refreshing<unknown> => isResult(u) && Predicate.hasProperty(u, "refreshing") && u.refreshing
 
-export const initial = (): Initial => Object.setPrototypeOf({}, ResultPrototype)
-export const running = <P = never>(progress?: P): Running<P> => Object.setPrototypeOf({ progress }, ResultPrototype)
-export const succeed = <A>(value: A): Success<A> => Object.setPrototypeOf({ value }, ResultPrototype)
+export const initial = (): Initial => Object.setPrototypeOf({ _tag: "Initial" }, ResultPrototype)
+export const running = <P = never>(progress?: P): Running<P> => Object.setPrototypeOf({ _tag: "Running", progress }, ResultPrototype)
+export const succeed = <A>(value: A): Success<A> => Object.setPrototypeOf({ _tag: "Success", value }, ResultPrototype)
 export const fail = <E, A = never>(
     cause: Cause.Cause<E>,
     previousSuccess?: Success<A>,
 ): Failure<A, E> => Object.setPrototypeOf({
+    _tag: "Failure",
     cause,
     previousSuccess: Option.fromNullable(previousSuccess),
 }, ResultPrototype)
@@ -144,10 +145,11 @@ export const forkEffectScoped = <A, E, R>(
     effect: Effect.Effect<A, E, R>
 ): Effect.Effect<Queue.Dequeue<Result<A, E>>, never, Scope.Scope | R> => Queue.unbounded<Result<A, E>>().pipe(
     Effect.tap(Queue.offer(initial())),
-    Effect.tap(queue => Effect.forkScoped(Queue.offer(queue, running()).pipe(
+    Effect.tap(queue => Effect.forkScoped(Effect.addFinalizer(() => Queue.shutdown(queue)).pipe(
+        Effect.andThen(Queue.offer(queue, running())),
         Effect.andThen(effect),
         Effect.exit,
         Effect.andThen(exit => Queue.offer(queue, fromExit(exit))),
-        Effect.andThen(Queue.shutdown(queue)),
+        Effect.scoped,
     ))),
 )

@@ -97,7 +97,7 @@ export const make: {
                 Option.isSome(value) &&
                 Option.isNone(error) &&
                 Option.isNone(validationFiber) &&
-                (Result.isRunning(submitResult) || Result.isRefreshing(submitResult))
+                !(Result.isRunning(submitResult) || Result.isRefreshing(submitResult))
             ),
         ),
     )
@@ -194,7 +194,7 @@ export const field = <A, I, R, SA, SE, SR, const P extends PropertyPath.Paths<No
         onNone: () => Effect.succeed([]),
     })),
     Subscribable.map(self.validationFiberRef, Option.isSome),
-    Subscribable.map(self.submitResultRef, flow(Result.isRunning, Result.isRefreshing)),
+    Subscribable.map(self.submitResultRef, result => Result.isRunning(result) || Result.isRefreshing(result)),
 )
 
 
