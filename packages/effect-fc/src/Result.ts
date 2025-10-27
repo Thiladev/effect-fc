@@ -95,6 +95,11 @@ const ResultPrototype = Object.freeze({
 } as const satisfies Result.Prototype)
 
 
+export interface ProgressService<P = never> {
+    readonly update: (progress: P) => Effect.Effect<void>
+}
+
+
 export const isResult = (u: unknown): u is Result<unknown, unknown, unknown> => Predicate.hasProperty(u, ResultTypeId)
 export const isInitial = (u: unknown): u is Initial => isResult(u) && u._tag === "Initial"
 export const isRunning = (u: unknown): u is Running => isResult(u) && u._tag === "Running"
