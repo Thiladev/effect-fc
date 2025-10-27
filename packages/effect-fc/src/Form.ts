@@ -1,9 +1,9 @@
-import * as AsyncData from "@typed/async-data"
 import { Array, Cause, Chunk, type Duration, Effect, Equal, Exit, Fiber, flow, identity, Option, ParseResult, Pipeable, Predicate, Ref, Schema, type Scope, Stream } from "effect"
 import type { NoSuchElementException } from "effect/Cause"
 import * as React from "react"
 import * as Component from "./Component.js"
 import * as PropertyPath from "./PropertyPath.js"
+import * as Result from "./Result.js"
 import * as Subscribable from "./Subscribable.js"
 import * as SubscriptionRef from "./SubscriptionRef.js"
 import * as SubscriptionSubRef from "./SubscriptionSubRef.js"
@@ -25,7 +25,7 @@ extends Pipeable.Pipeable {
     readonly encodedValueRef: SubscriptionRef.SubscriptionRef<I>
     readonly errorRef: SubscriptionRef.SubscriptionRef<Option.Option<ParseResult.ParseError>>
     readonly validationFiberRef: SubscriptionRef.SubscriptionRef<Option.Option<Fiber.Fiber<void, never>>>
-    readonly submitStateRef: SubscriptionRef.SubscriptionRef<AsyncData.AsyncData<SA, SE>>
+    readonly submitResultRef: SubscriptionRef.SubscriptionRef<Result.Result<SA, SE>>
 
     readonly canSubmitSubscribable: Subscribable.Subscribable<boolean>
 }
@@ -44,7 +44,7 @@ extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR> {
         readonly encodedValueRef: SubscriptionRef.SubscriptionRef<I>,
         readonly errorRef: SubscriptionRef.SubscriptionRef<Option.Option<ParseResult.ParseError>>,
         readonly validationFiberRef: SubscriptionRef.SubscriptionRef<Option.Option<Fiber.Fiber<void, never>>>,
-        readonly submitStateRef: SubscriptionRef.SubscriptionRef<AsyncData.AsyncData<SA, SE>>,
+        readonly submitResultRef: SubscriptionRef.SubscriptionRef<Result.Result<SA, SE>>,
 
         readonly canSubmitSubscribable: Subscribable.Subscribable<boolean>,
     ) {
@@ -77,7 +77,7 @@ export const make: {
     const valueRef = yield* SubscriptionRef.make(Option.none<A>())
     const errorRef = yield* SubscriptionRef.make(Option.none<ParseResult.ParseError>())
     const validationFiberRef = yield* SubscriptionRef.make(Option.none<Fiber.Fiber<void, never>>())
-    const submitStateRef = yield* SubscriptionRef.make(AsyncData.noData<SA, SE>())
+    const submitResultRef = yield* SubscriptionRef.make<Result.Result<SA, SE>>(Result.initial())
 
     return new FormImpl(
         options.schema,
@@ -89,15 +89,15 @@ export const make: {
         yield* SubscriptionRef.make(options.initialEncodedValue),
         errorRef,
         validationFiberRef,
-        submitStateRef,
+        submitResultRef,
 
         Subscribable.map(
-            Subscribable.zipLatestAll(valueRef, errorRef, validationFiberRef, submitStateRef),
-            ([value, error, validationFiber, submitState]) => (
+            Subscribable.zipLatestAll(valueRef, errorRef, validationFiberRef, submitResultRef),
+            ([value, error, validationFiber, submitResult]) => (
                 Option.isSome(value) &&
                 Option.isNone(error) &&
                 Option.isNone(validationFiber) &&
-                !AsyncData.isLoading(submitState)
+                (Result.isRunning(submitResult) || Result.isRefreshing(submitResult))
             ),
         ),
     )
@@ -198,11 +198,11 @@ export const field = <A, I, R, SA, SE, SR, const P extends PropertyPath.Paths<No
         onNone: () => Effect.succeed([]),
     })),
     Subscribable.map(self.validationFiberRef, Option.isSome),
-    Subscribable.map(self.submitStateRef, AsyncData.isLoading)
+    Subscribable.map(self.submitResultRef, flow(Result.isRunning, Result.isRefreshing)),
 )
 
 
-export const FormFieldTypeId: unique symbol = Symbol.for("effect-fc/FormField")
+export const FormFieldTypeId: unique symbol = Symbol.for("@effect-fc/Form/FormField")
 export type FormFieldTypeId = typeof FormFieldTypeId
 
 export interface FormField<in out A, in out I = A>
