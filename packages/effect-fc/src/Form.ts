@@ -150,20 +150,16 @@ export const run = <A, I, R, SA, SE, SR>(
 
 export const submit = <A, I, R, SA, SE, SR>(
     self: Form<A, I, R, SA, SE, SR>
-): Effect.Effect<Option.Option<AsyncData.AsyncData<SA, SE>>, NoSuchElementException, SR> => Effect.whenEffect(
+): Effect.Effect<Option.Option<Result.Result<SA, SE>>, NoSuchElementException, Scope.Scope | SR> => Effect.whenEffect(
     self.valueRef.pipe(
         Effect.andThen(identity),
-        Effect.tap(Ref.set(self.submitStateRef, AsyncData.loading())),
-        Effect.andThen(flow(
-            self.onSubmit as (value: NoInfer<A>) => Effect.Effect<SA, SE | ParseResult.ParseError, SR>,
-            Effect.tapErrorTag("ParseError", e => Ref.set(self.errorRef, Option.some(e as ParseResult.ParseError))),
-            Effect.exit,
-            Effect.map(Exit.match({
-                onSuccess: a => AsyncData.success(a),
-                onFailure: e => AsyncData.failure(e as Cause.Cause<SE>),
-            })),
-            Effect.tap(v => Ref.set(self.submitStateRef, v)),
-        )),
+        Effect.andThen(flow(self.onSubmit, Result.forkEffectScoped)),
+        Effect.andThen(Stream.fromQueue),
+        Stream.unwrap,
+        Stream.runFoldEffect(
+            Result.initial() as Result.Result<SA, SE>,
+            (_, result) => Effect.as(Ref.set(self.submitResultRef, result), result),
+        ),
     ),
 
     self.canSubmitSubscribable.get,
@@ -237,9 +233,9 @@ export const isFormField = (u: unknown): u is FormField<unknown, unknown> => Pre
 export const useSubmit = <A, I, R, SA, SE, SR>(
     self: Form<A, I, R, SA, SE, SR>
 ): Effect.Effect<
-    () => Promise<Option.Option<AsyncData.AsyncData<SA, SE>>>,
+    () => Promise<Option.Option<Result.Result<SA, SE>>>,
     never,
-    SR
+    Scope.Scope | SR
 > => Component.useCallbackPromise(() => submit(self), [self])
 
 export const useField = <A, I, R, SA, SE, SR, const P extends PropertyPath.Paths<NoInfer<I>>>(

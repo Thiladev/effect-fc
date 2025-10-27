@@ -140,7 +140,7 @@ export const toExit = <A, E, P>(
     }
 }
 
-export const forkEffect = <A, E, R>(
+export const forkEffectScoped = <A, E, R>(
     effect: Effect.Effect<A, E, R>
 ): Effect.Effect<Queue.Dequeue<Result<A, E>>, never, Scope.Scope | R> => Queue.unbounded<Result<A, E>>().pipe(
     Effect.tap(Queue.offer(initial())),
