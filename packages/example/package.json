@@ -29,9 +29,7 @@
     "@effect/platform": "^0.92.1",
     "@effect/platform-browser": "^0.72.0",
     "@radix-ui/themes": "^3.2.1",
-    "@typed/async-data": "^0.13.1",
     "@typed/id": "^0.17.2",
-    "@typed/lazy-ref": "^0.3.3",
     "effect": "^3.18.1",
     "effect-fc": "workspace:*",
     "react-icons": "^5.5.0"

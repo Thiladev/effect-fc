@@ -41,8 +41,5 @@
     "@types/react": "^19.0.0",
     "effect": "^3.15.0",
     "react": "^19.0.0"
-  },
-  "dependencies": {
-    "@typed/async-data": "^0.13.1"
   }
 }
