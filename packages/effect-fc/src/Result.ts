@@ -182,7 +182,7 @@ export const forkEffectScoped = <A, E, R, P = never>(
 ): Effect.Effect<
     Queue.Dequeue<Result<A, E, P>>,
     never,
-    Scope.Scope | R
+    Scope.Scope | Exclude<R, Progress<P>>
 > => Effect.Do.pipe(
     Effect.bind("queue", () => Queue.unbounded<Result<A, E, P>>()),
     Effect.bind("ref", () => Ref.make<Result<A, E, P>>(initial())),
