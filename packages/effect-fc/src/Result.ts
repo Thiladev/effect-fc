@@ -1,4 +1,4 @@
-import { Cause, Effect, Equal, Exit, Hash, Match, Option, Pipeable, Predicate, pipe, Queue, type Scope } from "effect"
+import { Cause, Context, Data, Effect, Equal, Exit, Hash, Layer, Match, Option, Pipeable, Predicate, pipe, Queue, Ref, type Scope } from "effect"
 
 
 export const ResultTypeId: unique symbol = Symbol.for("@effect-fc/Result/Result")
@@ -95,14 +95,44 @@ const ResultPrototype = Object.freeze({
 } as const satisfies Result.Prototype)
 
 
-export interface ProgressService<P = never> {
-    readonly update: (progress: P) => Effect.Effect<void>
+export interface Progress<P = never> {
+    readonly update: <E, R>(
+        f: (previous: P) => Effect.Effect<P, E, R>
+    ) => Effect.Effect<void, PreviousResultNotRunningOrRefreshing | E, R>
 }
+
+export class PreviousResultNotRunningOrRefreshing extends Data.TaggedError("@effect-fc/Result/PreviousResultNotRunningOrRefreshing")<{
+    readonly previous: Result<unknown, unknown, unknown>
+}> {}
+
+export const Progress = <P = never>(): Context.Tag<Progress<P>, Progress<P>> => Context.GenericTag("@effect-fc/Result/Progress")
+
+export const makeProgressLayer = <A, E, P = never>(
+    queue: Queue.Enqueue<Result<A, E, P>>,
+    ref: Ref.Ref<Result<A, E, P>>,
+): Layer.Layer<Progress<P>> => Layer.sync(Progress<P>(), () => ({
+    update: <E, R>(f: (previous: P) => Effect.Effect<P, E, R>) => Effect.Do.pipe(
+        Effect.bind("previous", () => Effect.andThen(
+            ref,
+            previous => isRunning(previous) || isRefreshing(previous)
+                ? Effect.succeed(previous)
+                : Effect.fail(new PreviousResultNotRunningOrRefreshing({ previous })),
+        )),
+        Effect.bind("progress", ({ previous }) => f(previous.progress)),
+        Effect.let("next", ({ previous, progress }) => Object.setPrototypeOf(
+            Object.assign({}, previous, { progress }),
+            Object.getPrototypeOf(previous),
+        )),
+        Effect.tap(({ next }) => Ref.set(ref, next)),
+        Effect.tap(({ next }) => Queue.offer(queue, next)),
+        Effect.asVoid,
+    )
+}))
 
 
 export const isResult = (u: unknown): u is Result<unknown, unknown, unknown> => Predicate.hasProperty(u, ResultTypeId)
 export const isInitial = (u: unknown): u is Initial => isResult(u) && u._tag === "Initial"
-export const isRunning = (u: unknown): u is Running => isResult(u) && u._tag === "Running"
+export const isRunning = (u: unknown): u is Running<unknown> => isResult(u) && u._tag === "Running"
 export const isSuccess = (u: unknown): u is Success<unknown> => isResult(u) && u._tag === "Success"
 export const isFailure = (u: unknown): u is Failure<unknown, unknown> => isResult(u) && u._tag === "Failure"
 export const isRefreshing = (u: unknown): u is Refreshing<unknown> => isResult(u) && Predicate.hasProperty(u, "refreshing") && u.refreshing
@@ -146,15 +176,32 @@ export const toExit = <A, E, P>(
     }
 }
 
-export const forkEffectScoped = <A, E, R>(
-    effect: Effect.Effect<A, E, R>
-): Effect.Effect<Queue.Dequeue<Result<A, E>>, never, Scope.Scope | R> => Queue.unbounded<Result<A, E>>().pipe(
-    Effect.tap(Queue.offer(initial())),
-    Effect.tap(queue => Effect.forkScoped(Effect.addFinalizer(() => Queue.shutdown(queue)).pipe(
-        Effect.andThen(Queue.offer(queue, running())),
-        Effect.andThen(effect),
-        Effect.exit,
-        Effect.andThen(exit => Queue.offer(queue, fromExit(exit))),
-        Effect.scoped,
-    ))),
+export const forkEffectScoped = <A, E, R, P = never>(
+    effect: Effect.Effect<A, E, Progress<NoInfer<P>> | R>,
+    initialProgress?: P,
+): Effect.Effect<
+    Queue.Dequeue<Result<A, E, P>>,
+    never,
+    Scope.Scope | R
+> => Effect.Do.pipe(
+    Effect.bind("queue", () => Queue.unbounded<Result<A, E, P>>()),
+    Effect.bind("ref", () => Ref.make<Result<A, E, P>>(initial())),
+    Effect.tap(({ queue, ref }) => Effect.andThen(ref, v => Queue.offer(queue, v))),
+    Effect.tap(({ queue, ref }) => Effect.forkScoped(
+        Effect.addFinalizer(() => Queue.shutdown(queue)).pipe(
+            Effect.andThen(Effect.succeed(running(initialProgress)).pipe(
+                Effect.tap(v => Ref.set(ref, v)),
+                Effect.tap(v => Queue.offer(queue, v)),
+            )),
+            Effect.andThen(effect),
+            Effect.exit,
+            Effect.andThen(exit => Effect.succeed(fromExit(exit)).pipe(
+                Effect.tap(v => Ref.set(ref, v)),
+                Effect.tap(v => Queue.offer(queue, v)),
+            )),
+            Effect.scoped,
+            Effect.provide(makeProgressLayer(queue, ref)),
+        )
+    )),
+    Effect.map(({ queue }) => queue),
 )
