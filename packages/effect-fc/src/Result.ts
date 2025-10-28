@@ -177,7 +177,7 @@ export const toExit = <A, E, P>(
 }
 
 export const forkEffectScoped = <A, E, R, P = never>(
-    effect: Effect.Effect<A, E, Progress<NoInfer<P>> | R>,
+    effect: Effect.Effect<A, E, R>,
     initialProgress?: P,
 ): Effect.Effect<
     Queue.Dequeue<Result<A, E, P>>,
