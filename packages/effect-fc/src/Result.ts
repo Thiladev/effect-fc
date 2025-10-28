@@ -29,7 +29,7 @@ export interface Initial extends Result.Prototype {
 
 export interface Running<P = never> extends Result.Prototype {
     readonly _tag: "Running"
-    readonly progress: P
+    readonly progress: Option.Option<P>
 }
 
 export interface Success<A> extends Result.Prototype {
@@ -45,7 +45,7 @@ export interface Failure<A, E = never> extends Result.Prototype {
 
 export interface Refreshing<P = never> {
     readonly refreshing: true
-    readonly progress: P
+    readonly progress: Option.Option<P>
 }
 
 
@@ -96,7 +96,7 @@ const ResultPrototype = Object.freeze({
 
 
 export interface ProgressService<P = never> {
-    readonly update: (progress: P) => Effect.Effect<void>
+    readonly update: (f: (previous: Option.Option<P>) => Option.Option<P>) => Effect.Effect<void>
 }
 
 
@@ -108,7 +108,10 @@ export const isFailure = (u: unknown): u is Failure<unknown, unknown> => isResul
 export const isRefreshing = (u: unknown): u is Refreshing<unknown> => isResult(u) && Predicate.hasProperty(u, "refreshing") && u.refreshing
 
 export const initial = (): Initial => Object.setPrototypeOf({ _tag: "Initial" }, ResultPrototype)
-export const running = <P = never>(progress?: P): Running<P> => Object.setPrototypeOf({ _tag: "Running", progress }, ResultPrototype)
+export const running = <P = never>(progress?: P): Running<P> => Object.setPrototypeOf({
+    _tag: "Running",
+    progress: Option.fromNullable(progress),
+}, ResultPrototype)
 export const succeed = <A>(value: A): Success<A> => Object.setPrototypeOf({ _tag: "Success", value }, ResultPrototype)
 export const fail = <E, A = never>(
     cause: Cause.Cause<E>,
@@ -122,7 +125,7 @@ export const refreshing = <R extends Success<any> | Failure<any, any>, P = never
     result: R,
     progress?: P,
 ): Omit<R, keyof Refreshing<Result.Progress<R>>> & Refreshing<P> => Object.setPrototypeOf(
-    Object.assign({}, result, { progress }),
+    Object.assign({}, result, { progress: Option.fromNullable(progress) }),
     Object.getPrototypeOf(result),
 )
 
@@ -146,9 +149,9 @@ export const toExit = <A, E, P>(
     }
 }
 
-export const forkEffectScoped = <A, E, R>(
-    effect: Effect.Effect<A, E, R>
-): Effect.Effect<Queue.Dequeue<Result<A, E>>, never, Scope.Scope | R> => Queue.unbounded<Result<A, E>>().pipe(
+export const forkEffectScoped = <A, E, R, P = never>(
+    effect: Effect.Effect<A, E, ProgressService<P> | R>
+): Effect.Effect<Queue.Dequeue<Result<A, E, P>>, never, Scope.Scope | R> => Queue.unbounded<Result<A, E>>().pipe(
     Effect.tap(Queue.offer(initial())),
     Effect.tap(queue => Effect.forkScoped(Effect.addFinalizer(() => Queue.shutdown(queue)).pipe(
         Effect.andThen(Queue.offer(queue, running())),
