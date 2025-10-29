@@ -95,6 +95,53 @@ const ResultPrototype = Object.freeze({
 } as const satisfies Result.Prototype)
 
 
+export const isResult = (u: unknown): u is Result<unknown, unknown, unknown> => Predicate.hasProperty(u, ResultTypeId)
+export const isInitial = (u: unknown): u is Initial => isResult(u) && u._tag === "Initial"
+export const isRunning = (u: unknown): u is Running<unknown> => isResult(u) && u._tag === "Running"
+export const isSuccess = (u: unknown): u is Success<unknown> => isResult(u) && u._tag === "Success"
+export const isFailure = (u: unknown): u is Failure<unknown, unknown> => isResult(u) && u._tag === "Failure"
+export const isRefreshing = (u: unknown): u is Refreshing<unknown> => isResult(u) && Predicate.hasProperty(u, "refreshing") && u.refreshing
+
+export const initial = (): Initial => Object.setPrototypeOf({ _tag: "Initial" }, ResultPrototype)
+export const running = <P = never>(progress?: P): Running<P> => Object.setPrototypeOf({ _tag: "Running", progress }, ResultPrototype)
+export const succeed = <A>(value: A): Success<A> => Object.setPrototypeOf({ _tag: "Success", value }, ResultPrototype)
+
+export const fail = <E, A = never>(
+    cause: Cause.Cause<E>,
+    previousSuccess?: Success<A>,
+): Failure<A, E> => Object.setPrototypeOf({
+    _tag: "Failure",
+    cause,
+    previousSuccess: Option.fromNullable(previousSuccess),
+}, ResultPrototype)
+export const refreshing = <R extends Success<any> | Failure<any, any>, P = never>(
+    result: R,
+    progress?: P,
+): Omit<R, keyof Refreshing<Result.Progress<R>>> & Refreshing<P> => Object.setPrototypeOf(
+    Object.assign({}, result, { progress }),
+    Object.getPrototypeOf(result),
+)
+
+export const fromExit = <A, E>(
+    exit: Exit.Exit<A, E>
+): Success<A> | Failure<A, E> => exit._tag === "Success"
+    ? succeed(exit.value)
+    : fail(exit.cause)
+
+export const toExit = <A, E, P>(
+    self: Result<A, E, P>
+): Exit.Exit<A, E | Cause.NoSuchElementException> => {
+    switch (self._tag) {
+        case "Success":
+            return Exit.succeed(self.value)
+        case "Failure":
+            return Exit.failCause(self.cause)
+        default:
+            return Exit.fail(new Cause.NoSuchElementException())
+    }
+}
+
+
 export interface Progress<P = never> {
     readonly update: <E, R>(
         f: (previous: P) => Effect.Effect<P, E, R>
@@ -126,70 +173,37 @@ export const makeProgressLayer = <A, E, P = never>(
         Effect.tap(({ next }) => Ref.set(ref, next)),
         Effect.tap(({ next }) => Queue.offer(queue, next)),
         Effect.asVoid,
-    )
+    ),
 }))
 
 
-export const isResult = (u: unknown): u is Result<unknown, unknown, unknown> => Predicate.hasProperty(u, ResultTypeId)
-export const isInitial = (u: unknown): u is Initial => isResult(u) && u._tag === "Initial"
-export const isRunning = (u: unknown): u is Running<unknown> => isResult(u) && u._tag === "Running"
-export const isSuccess = (u: unknown): u is Success<unknown> => isResult(u) && u._tag === "Success"
-export const isFailure = (u: unknown): u is Failure<unknown, unknown> => isResult(u) && u._tag === "Failure"
-export const isRefreshing = (u: unknown): u is Refreshing<unknown> => isResult(u) && Predicate.hasProperty(u, "refreshing") && u.refreshing
+export namespace forkEffectScoped {
+    export type ContextInput<R, P> = (R extends Progress<infer X>
+        ? [X] extends [P]
+            ? R
+            : never
+        : R
+    )
 
-export const initial = (): Initial => Object.setPrototypeOf({ _tag: "Initial" }, ResultPrototype)
-export const running = <P = never>(progress?: P): Running<P> => Object.setPrototypeOf({ _tag: "Running", progress }, ResultPrototype)
-export const succeed = <A>(value: A): Success<A> => Object.setPrototypeOf({ _tag: "Success", value }, ResultPrototype)
-export const fail = <E, A = never>(
-    cause: Cause.Cause<E>,
-    previousSuccess?: Success<A>,
-): Failure<A, E> => Object.setPrototypeOf({
-    _tag: "Failure",
-    cause,
-    previousSuccess: Option.fromNullable(previousSuccess),
-}, ResultPrototype)
-export const refreshing = <R extends Success<any> | Failure<any, any>, P = never>(
-    result: R,
-    progress?: P,
-): Omit<R, keyof Refreshing<Result.Progress<R>>> & Refreshing<P> => Object.setPrototypeOf(
-    Object.assign({}, result, { progress }),
-    Object.getPrototypeOf(result),
-)
-
-
-export const fromExit = <A, E>(
-    exit: Exit.Exit<A, E>
-): Success<A> | Failure<A, E> => exit._tag === "Success"
-    ? succeed(exit.value)
-    : fail(exit.cause)
-
-export const toExit = <A, E, P>(
-    self: Result<A, E, P>
-): Exit.Exit<A, E | Cause.NoSuchElementException> => {
-    switch (self._tag) {
-        case "Success":
-            return Exit.succeed(self.value)
-        case "Failure":
-            return Exit.failCause(self.cause)
-        default:
-            return Exit.fail(new Cause.NoSuchElementException())
+    export interface Options<P = never> {
+        readonly initialProgress?: P
     }
 }
 
 export const forkEffectScoped = <A, E, R, P = never>(
-    effect: Effect.Effect<A, E, R>,
-    initialProgress?: P,
+    effect: Effect.Effect<A, E, forkEffectScoped.ContextInput<R, NoInfer<P>>>,
+    options?: forkEffectScoped.Options<P>,
 ): Effect.Effect<
     Queue.Dequeue<Result<A, E, P>>,
     never,
-    Scope.Scope | Exclude<R, Progress<P>>
+    Scope.Scope | Exclude<R, Progress<any>>
 > => Effect.Do.pipe(
     Effect.bind("queue", () => Queue.unbounded<Result<A, E, P>>()),
     Effect.bind("ref", () => Ref.make<Result<A, E, P>>(initial())),
     Effect.tap(({ queue, ref }) => Effect.andThen(ref, v => Queue.offer(queue, v))),
     Effect.tap(({ queue, ref }) => Effect.forkScoped(
         Effect.addFinalizer(() => Queue.shutdown(queue)).pipe(
-            Effect.andThen(Effect.succeed(running(initialProgress)).pipe(
+            Effect.andThen(Effect.succeed(running(options?.initialProgress)).pipe(
                 Effect.tap(v => Ref.set(ref, v)),
                 Effect.tap(v => Queue.offer(queue, v)),
             )),
@@ -204,4 +218,12 @@ export const forkEffectScoped = <A, E, R, P = never>(
         )
     )),
     Effect.map(({ queue }) => queue),
+)
+
+
+const t = forkEffectScoped(
+    Effect.gen(function*() {
+        yield* Progress()
+    }),
+    { initialProgress: "juif" }
 )
