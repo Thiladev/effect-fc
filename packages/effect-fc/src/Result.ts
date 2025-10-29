@@ -185,7 +185,7 @@ export namespace forkEffectScoped {
         : R
     )
 
-    export interface Options<P = never> {
+    export interface Options<P> {
         readonly initialProgress?: P
     }
 

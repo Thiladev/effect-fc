@@ -1,8 +1,9 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: {} is the default type for React props */
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
-import { Context, type Duration, Effect, Effectable, Equivalence, ExecutionStrategy, Exit, Fiber, Function, HashMap, Layer, ManagedRuntime, Option, Predicate, Ref, Runtime, Scope, Tracer, type Types, type Utils } from "effect"
+import { Context, type Duration, Effect, Effectable, Equivalence, ExecutionStrategy, Exit, Fiber, Function, HashMap, Layer, ManagedRuntime, Option, Predicate, Ref, Runtime, Scope, Stream, Tracer, type Types, type Utils } from "effect"
 import * as React from "react"
 import { Memoized } from "./index.js"
+import * as Result from "./Result.js"
 
 
 export const TypeId: unique symbol = Symbol.for("@effect-fc/Component/Component")
@@ -511,6 +512,40 @@ export const useOnChange: {
     return yield* React.useMemo(() => Runtime.runSync(runtime)(
         Effect.cached(Effect.provideService(f(), Scope.Scope, scope))
     ), [scope])
+})
+
+export namespace useOnChangeResult {
+    export interface Options<A, E, P>
+    extends Result.forkEffectScoped.Options<P>, useReactEffect.Options {
+        readonly equivalence?: Equivalence.Equivalence<Result.Result<A, E, P>>
+    }
+}
+
+export const useOnChangeResult: {
+    <A, E, R, P = never>(
+        f: () => Effect.Effect<A, E, Result.forkEffectScoped.InputContext<R, NoInfer<P>>>,
+        deps?: React.DependencyList,
+        options?: useOnChangeResult.Options<A, E, P>,
+    ): Effect.Effect<
+        Result.Result<A, E, P>,
+        never,
+        Exclude<Result.forkEffectScoped.OutputContext<R>, Scope.Scope>
+    >
+} = Effect.fnUntraced(function* <A, E, R, P = never>(
+    f: () => Effect.Effect<A, E, Result.forkEffectScoped.InputContext<R, NoInfer<P>>>,
+    deps?: React.DependencyList,
+    options?: useOnChangeResult.Options<A, E, P>,
+) {
+    const [result, setResult] = React.useState(() => Result.initial() as Result.Result<A, E, P>)
+
+    yield* useReactEffect(() => Result.forkEffectScoped(f(), options).pipe(
+        Effect.andThen(Stream.fromQueue),
+        Stream.unwrap,
+        Stream.changesWith(options?.equivalence ?? Equivalence.strict()),
+        Stream.runForEach(result => Effect.sync(() => setResult(result))),
+    ), deps, options)
+
+    return result
 })
 
 export namespace useReactEffect {
