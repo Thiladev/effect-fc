@@ -178,7 +178,7 @@ export const makeProgressLayer = <A, E, P = never>(
 
 
 export namespace forkEffectScoped {
-    export type ContextInput<R, P> = (R extends Progress<infer X>
+    export type InputContext<R, P> = (R extends Progress<infer X>
         ? [X] extends [P]
             ? R
             : never
@@ -188,15 +188,17 @@ export namespace forkEffectScoped {
     export interface Options<P = never> {
         readonly initialProgress?: P
     }
+
+    export type OutputContext<R> = Scope.Scope | Exclude<R, Progress<any> | Progress<never>>
 }
 
 export const forkEffectScoped = <A, E, R, P = never>(
-    effect: Effect.Effect<A, E, forkEffectScoped.ContextInput<R, NoInfer<P>>>,
+    effect: Effect.Effect<A, E, forkEffectScoped.InputContext<R, NoInfer<P>>>,
     options?: forkEffectScoped.Options<P>,
 ): Effect.Effect<
     Queue.Dequeue<Result<A, E, P>>,
     never,
-    Scope.Scope | Exclude<R, Progress<any>>
+    forkEffectScoped.OutputContext<R>
 > => Effect.Do.pipe(
     Effect.bind("queue", () => Queue.unbounded<Result<A, E, P>>()),
     Effect.bind("ref", () => Ref.make<Result<A, E, P>>(initial())),
@@ -218,12 +220,4 @@ export const forkEffectScoped = <A, E, R, P = never>(
         )
     )),
     Effect.map(({ queue }) => queue),
-)
-
-
-const t = forkEffectScoped(
-    Effect.gen(function*() {
-        yield* Progress()
-    }),
-    { initialProgress: "juif" }
-)
+) as Effect.Effect<Queue.Queue<Result<A, E, P>>, never, Scope.Scope>
