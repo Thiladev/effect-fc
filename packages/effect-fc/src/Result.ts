@@ -1,4 +1,4 @@
-import { Cause, Context, Data, Effect, Equal, Exit, Hash, Layer, Match, Option, Pipeable, Predicate, pipe, Queue, Ref, type Scope } from "effect"
+import { Cause, Context, Data, Effect, Equal, Exit, Hash, Layer, Match, Option, Pipeable, Predicate, pipe, Queue, Ref, Scope } from "effect"
 
 
 export const ResultTypeId: unique symbol = Symbol.for("@effect-fc/Result/Result")
@@ -200,16 +200,17 @@ export const forkEffectScoped = <A, E, R, P = never>(
     never,
     forkEffectScoped.OutputContext<R>
 > => Effect.Do.pipe(
+    Effect.bind("scope", () => Scope.Scope),
     Effect.bind("queue", () => Queue.unbounded<Result<A, E, P>>()),
     Effect.bind("ref", () => Ref.make<Result<A, E, P>>(initial())),
     Effect.tap(({ queue, ref }) => Effect.andThen(ref, v => Queue.offer(queue, v))),
-    Effect.tap(({ queue, ref }) => Effect.forkScoped(
+    Effect.tap(({ scope, queue, ref }) => Effect.forkScoped(
         Effect.addFinalizer(() => Queue.shutdown(queue)).pipe(
             Effect.andThen(Effect.succeed(running(options?.initialProgress)).pipe(
                 Effect.tap(v => Ref.set(ref, v)),
                 Effect.tap(v => Queue.offer(queue, v)),
             )),
-            Effect.andThen(effect),
+            Effect.andThen(Effect.provideService(effect, Scope.Scope, scope)),
             Effect.exit,
             Effect.andThen(exit => Effect.succeed(fromExit(exit)).pipe(
                 Effect.tap(v => Ref.set(ref, v)),
