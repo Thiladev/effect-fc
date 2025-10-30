@@ -514,11 +514,36 @@ export const useOnChange: {
     ), [scope])
 })
 
-export namespace useOnChangeResult {
-    export interface Options<A, E, P>
-    extends Result.forkEffectScoped.Options<P>, useReactEffect.Options {
+export namespace useOnMountResult {
+    export interface Options<A, E, P> extends Result.forkEffectScoped.Options<P> {
         readonly equivalence?: Equivalence.Equivalence<Result.Result<A, E, P>>
     }
+}
+
+export const useOnMountResult: {
+    <A, E, R, P = never>(
+        f: () => Effect.Effect<A, E, Result.forkEffectScoped.InputContext<R, NoInfer<P>>>,
+        options?: useOnChangeResult.Options<A, E, P>,
+    ): Effect.Effect<Result.Result<A, E, P>, never, Result.forkEffectScoped.OutputContext<R>>
+} = Effect.fnUntraced(function* <A, E, R, P = never>(
+    f: () => Effect.Effect<A, E, Result.forkEffectScoped.InputContext<R, NoInfer<P>>>,
+    options?: useOnChangeResult.Options<A, E, P>,
+) {
+    const [result, setResult] = React.useState(() => Result.initial() as Result.Result<A, E, P>)
+
+    yield* useOnMount(() => Result.forkEffectScoped(f(), options).pipe(
+        Effect.andThen(Stream.fromQueue),
+        Stream.unwrap,
+        Stream.changesWith(options?.equivalence ?? Equivalence.strict()),
+        Stream.runForEach(result => Effect.sync(() => setResult(result))),
+    ))
+
+    return result
+})
+
+export namespace useOnChangeResult {
+    export interface Options<A, E, P>
+    extends useOnMountResult.Options<A, E, P>, useReactEffect.Options {}
 }
 
 export const useOnChangeResult: {
