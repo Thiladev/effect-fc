@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: {} is the default type for React props */
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
-import { Context, type Duration, Effect, Effectable, Equivalence, ExecutionStrategy, Exit, Fiber, Function, HashMap, Layer, ManagedRuntime, Option, Predicate, Ref, Runtime, Scope, Stream, Tracer, type Types, type Utils } from "effect"
+import { Context, type Duration, Effect, Effectable, Equivalence, ExecutionStrategy, Exit, Fiber, Function, HashMap, Layer, ManagedRuntime, Option, Predicate, Ref, Runtime, Scope, Stream, Tracer, type Utils } from "effect"
 import * as React from "react"
 import { Memoized } from "./index.js"
 import * as Result from "./Result.js"
@@ -387,9 +387,9 @@ export const withOptions: {
 export const withRuntime: {
     <P extends {}, A extends React.ReactNode, E, R>(
         context: React.Context<Runtime.Runtime<R>>,
-    ): (self: Component<P, A, E, Types.NoInfer<R>>) => (props: P) => A
+    ): (self: Component<P, A, E, Scope.Scope | NoInfer<R>>) => (props: P) => A
     <P extends {}, A extends React.ReactNode, E, R>(
-        self: Component<P, A, E, Types.NoInfer<R>>,
+        self: Component<P, A, E, Scope.Scope | NoInfer<R>>,
         context: React.Context<Runtime.Runtime<R>>,
     ): (props: P) => A
 } = Function.dual(2, <P extends {}, A extends React.ReactNode, E, R>(
@@ -403,7 +403,7 @@ export const withRuntime: {
 })
 
 
-export class ScopeMap extends Effect.Service<ScopeMap>()("effect-fc/Component/ScopeMap", {
+export class ScopeMap extends Effect.Service<ScopeMap>()("@effect-fc/Component/ScopeMap", {
     effect: Effect.bind(Effect.Do, "ref", () => Ref.make(HashMap.empty<object, ScopeMap.Entry>()))
 }) {}
 
