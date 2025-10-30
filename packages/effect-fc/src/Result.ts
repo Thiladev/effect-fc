@@ -177,6 +177,46 @@ export const makeProgressLayer = <A, E, P = never>(
 }))
 
 
+export namespace forkEffect {
+    export type InputContext<R, P> = R extends Progress<infer X> ? [X] extends [P] ? R : never : R
+    export type OutputContext<R> = Scope.Scope | Exclude<R, Progress<any> | Progress<never>>
+
+    export interface Options<P> {
+        readonly initialProgress?: P
+    }
+}
+
+export const forkEffect = <A, E, R, P = never>(
+    effect: Effect.Effect<A, E, forkEffect.InputContext<R, NoInfer<P>>>,
+    options?: forkEffect.Options<P>,
+): Effect.Effect<
+    Queue.Dequeue<Result<A, E, P>>,
+    never,
+    forkEffect.OutputContext<R>
+> => Effect.Do.pipe(
+    Effect.bind("scope", () => Scope.Scope),
+    Effect.bind("queue", () => Queue.unbounded<Result<A, E, P>>()),
+    Effect.bind("ref", () => Ref.make<Result<A, E, P>>(initial())),
+    Effect.tap(({ queue, ref }) => Effect.andThen(ref, v => Queue.offer(queue, v))),
+    Effect.tap(({ scope, queue, ref }) => Effect.forkScoped(
+        Effect.addFinalizer(() => Queue.shutdown(queue)).pipe(
+            Effect.andThen(Effect.succeed(running(options?.initialProgress)).pipe(
+                Effect.tap(v => Ref.set(ref, v)),
+                Effect.tap(v => Queue.offer(queue, v)),
+            )),
+            Effect.andThen(Effect.provideService(effect, Scope.Scope, scope)),
+            Effect.exit,
+            Effect.andThen(exit => Effect.succeed(fromExit(exit)).pipe(
+                Effect.tap(v => Ref.set(ref, v)),
+                Effect.tap(v => Queue.offer(queue, v)),
+            )),
+            Effect.scoped,
+            Effect.provide(makeProgressLayer(queue, ref)),
+        )
+    )),
+    Effect.map(({ queue }) => queue),
+) as Effect.Effect<Queue.Queue<Result<A, E, P>>, never, Scope.Scope>
+
 export namespace forkEffectScoped {
     export type InputContext<R, P> = (R extends Progress<infer X>
         ? [X] extends [P]
