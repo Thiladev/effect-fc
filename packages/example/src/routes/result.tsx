@@ -2,7 +2,7 @@ import { HttpClient } from "@effect/platform"
 import { Container, Heading, Text } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
 import { Effect, Match, Schema } from "effect"
-import { Component } from "effect-fc"
+import { Component, Result, Subscribable } from "effect-fc"
 import { runtime } from "@/runtime"
 
 
@@ -13,12 +13,15 @@ const Post = Schema.Struct({
     body: Schema.String,
 })
 
-const Result = Component.makeUntraced("Result")(function*() {
-    const result = yield* Component.useOnMountResult(() => HttpClient.HttpClient.pipe(
+const ResultView = Component.makeUntraced("Result")(function*() {
+    const resultSubscribable = yield* Component.useOnMount(() => HttpClient.HttpClient.pipe(
         Effect.andThen(client => client.get("https://jsonplaceholder.typicode.com/posts/1")),
+        Effect.andThen(response => response.json),
         Effect.andThen(Schema.decodeUnknown(Post)),
         Effect.tap(Effect.sleep("250 millis")),
+        Result.forkEffect,
     ))
+    const [result] = yield* Subscribable.useSubscribables(resultSubscribable)
 
     return (
         <Container>
@@ -40,5 +43,5 @@ const Result = Component.makeUntraced("Result")(function*() {
 )
 
 export const Route = createFileRoute("/result")({
-    component: Result
+    component: ResultView
 })
