@@ -1,4 +1,4 @@
-import { Cause, Context, Data, Effect, Equal, Exit, Hash, Layer, Match, Option, Pipeable, Predicate, pipe, Queue, Ref, Scope } from "effect"
+import { Cause, Context, Data, Effect, Equal, Exit, Hash, Layer, Match, Option, Pipeable, Predicate, pipe, Queue, Ref, type Scope, type Subscribable, SubscriptionRef } from "effect"
 
 
 export const ResultTypeId: unique symbol = Symbol.for("@effect-fc/Result/Result")
@@ -142,38 +142,47 @@ export const toExit = <A, E, P>(
 }
 
 
+export interface State<A, E = never, P = never> {
+    readonly get: Effect.Effect<Result<A, E, P>>
+    readonly set: (v: Result<A, E, P>) => Effect.Effect<void>
+}
+
+export const State = <A, E = never, P = never>(): Context.Tag<State<A, E, P>, State<A, E, P>> => Context.GenericTag("@effect-fc/Result/State")
+
 export interface Progress<P = never> {
     readonly update: <E, R>(
         f: (previous: P) => Effect.Effect<P, E, R>
-    ) => Effect.Effect<void, PreviousResultNotRunningOrRefreshing | E, R>
+    ) => Effect.Effect<void, PreviousResultNotRunningNorRefreshing | E, R>
 }
 
-export class PreviousResultNotRunningOrRefreshing extends Data.TaggedError("@effect-fc/Result/PreviousResultNotRunningOrRefreshing")<{
+export class PreviousResultNotRunningNorRefreshing extends Data.TaggedError("@effect-fc/Result/PreviousResultNotRunningNorRefreshing")<{
     readonly previous: Result<unknown, unknown, unknown>
 }> {}
 
 export const Progress = <P = never>(): Context.Tag<Progress<P>, Progress<P>> => Context.GenericTag("@effect-fc/Result/Progress")
 
-export const makeProgressLayer = <A, E, P = never>(
-    queue: Queue.Enqueue<Result<A, E, P>>,
-    ref: Ref.Ref<Result<A, E, P>>,
-): Layer.Layer<Progress<P>> => Layer.sync(Progress<P>(), () => ({
-    update: <E, R>(f: (previous: P) => Effect.Effect<P, E, R>) => Effect.Do.pipe(
-        Effect.bind("previous", () => Effect.andThen(
-            ref,
-            previous => isRunning(previous) || isRefreshing(previous)
-                ? Effect.succeed(previous)
-                : Effect.fail(new PreviousResultNotRunningOrRefreshing({ previous })),
-        )),
-        Effect.bind("progress", ({ previous }) => f(previous.progress)),
-        Effect.let("next", ({ previous, progress }) => Object.setPrototypeOf(
-            Object.assign({}, previous, { progress }),
-            Object.getPrototypeOf(previous),
-        )),
-        Effect.tap(({ next }) => Ref.set(ref, next)),
-        Effect.tap(({ next }) => Queue.offer(queue, next)),
-        Effect.asVoid,
-    ),
+export const makeProgressLayer = <A, E, P = never>(): Layer.Layer<
+    Progress<P>,
+    never,
+    State<A, E, P>
+> => Layer.effect(Progress<P>(), Effect.gen(function*() {
+    const state = yield* State<A, E, P>()
+
+    return {
+        update: <E, R>(f: (previous: P) => Effect.Effect<P, E, R>) => Effect.Do.pipe(
+            Effect.bind("previous", () => Effect.andThen(state.get, previous =>
+                isRunning(previous) || isRefreshing(previous)
+                    ? Effect.succeed(previous)
+                    : Effect.fail(new PreviousResultNotRunningNorRefreshing({ previous })),
+            )),
+            Effect.bind("progress", ({ previous }) => f(previous.progress)),
+            Effect.let("next", ({ previous, progress }) => Object.setPrototypeOf(
+                Object.assign({}, previous, { progress }),
+                Object.getPrototypeOf(previous),
+            )),
+            Effect.andThen(({ next }) => state.set(next)),
+        ),
+    }
 }))
 
 
@@ -190,75 +199,55 @@ export const forkEffect = <A, E, R, P = never>(
     effect: Effect.Effect<A, E, forkEffect.InputContext<R, NoInfer<P>>>,
     options?: forkEffect.Options<P>,
 ): Effect.Effect<
-    Queue.Dequeue<Result<A, E, P>>,
+    Subscribable.Subscribable<Result<A, E, P>>,
     never,
     forkEffect.OutputContext<R>
-> => Effect.Do.pipe(
-    Effect.bind("scope", () => Scope.Scope),
-    Effect.bind("queue", () => Queue.unbounded<Result<A, E, P>>()),
-    Effect.bind("ref", () => Ref.make<Result<A, E, P>>(initial())),
-    Effect.tap(({ queue, ref }) => Effect.andThen(ref, v => Queue.offer(queue, v))),
-    Effect.tap(({ scope, queue, ref }) => Effect.forkScoped(
-        Effect.addFinalizer(() => Queue.shutdown(queue)).pipe(
-            Effect.andThen(Effect.succeed(running(options?.initialProgress)).pipe(
-                Effect.tap(v => Ref.set(ref, v)),
-                Effect.tap(v => Queue.offer(queue, v)),
-            )),
-            Effect.andThen(Effect.provideService(effect, Scope.Scope, scope)),
-            Effect.exit,
-            Effect.andThen(exit => Effect.succeed(fromExit(exit)).pipe(
-                Effect.tap(v => Ref.set(ref, v)),
-                Effect.tap(v => Queue.offer(queue, v)),
-            )),
-            Effect.scoped,
-            Effect.provide(makeProgressLayer(queue, ref)),
-        )
+> => Effect.tap(
+    SubscriptionRef.make<Result<A, E, P>>(initial()),
+    ref => Effect.forkScoped(State<A, E, P>().pipe(
+        Effect.andThen(state => state.set(running(options?.initialProgress)).pipe(
+            Effect.andThen(effect),
+            Effect.onExit(exit => state.set(fromExit(exit))),
+        )),
+        Effect.provide(Layer.empty.pipe(
+            Layer.provideMerge(makeProgressLayer<A, E, P>()),
+            Layer.provideMerge(Layer.succeed(State<A, E, P>(), {
+                get: ref,
+                set: v => Ref.set(ref, v),
+            })),
+        )),
     )),
-    Effect.map(({ queue }) => queue),
-) as Effect.Effect<Queue.Queue<Result<A, E, P>>, never, Scope.Scope>
+) as Effect.Effect<Subscribable.Subscribable<Result<A, E, P>>, never, Scope.Scope>
 
-export namespace forkEffectScoped {
-    export type InputContext<R, P> = (R extends Progress<infer X>
-        ? [X] extends [P]
-            ? R
-            : never
-        : R
-    )
-
-    export interface Options<P> {
-        readonly initialProgress?: P
-    }
-
-    export type OutputContext<R> = Scope.Scope | Exclude<R, Progress<any> | Progress<never>>
+export namespace forkEffectDequeue {
+    export type InputContext<R, P> = forkEffect.InputContext<R, P>
+    export type OutputContext<R> = forkEffect.OutputContext<R>
+    export interface Options<P> extends forkEffect.Options<P> {}
 }
 
-export const forkEffectScoped = <A, E, R, P = never>(
-    effect: Effect.Effect<A, E, forkEffectScoped.InputContext<R, NoInfer<P>>>,
-    options?: forkEffectScoped.Options<P>,
+export const forkEffectDequeue = <A, E, R, P = never>(
+    effect: Effect.Effect<A, E, forkEffectDequeue.InputContext<R, NoInfer<P>>>,
+    options?: forkEffectDequeue.Options<P>,
 ): Effect.Effect<
     Queue.Dequeue<Result<A, E, P>>,
     never,
-    forkEffectScoped.OutputContext<R>
-> => Effect.Do.pipe(
-    Effect.bind("scope", () => Scope.Scope),
-    Effect.bind("queue", () => Queue.unbounded<Result<A, E, P>>()),
-    Effect.bind("ref", () => Ref.make<Result<A, E, P>>(initial())),
-    Effect.tap(({ queue, ref }) => Effect.andThen(ref, v => Queue.offer(queue, v))),
-    Effect.tap(({ scope, queue, ref }) => Effect.forkScoped(
-        Effect.addFinalizer(() => Queue.shutdown(queue)).pipe(
-            Effect.andThen(Effect.succeed(running(options?.initialProgress)).pipe(
-                Effect.tap(v => Ref.set(ref, v)),
-                Effect.tap(v => Queue.offer(queue, v)),
-            )),
-            Effect.andThen(Effect.provideService(effect, Scope.Scope, scope)),
-            Effect.exit,
-            Effect.andThen(exit => Effect.succeed(fromExit(exit)).pipe(
-                Effect.tap(v => Ref.set(ref, v)),
-                Effect.tap(v => Queue.offer(queue, v)),
-            )),
-            Effect.scoped,
-            Effect.provide(makeProgressLayer(queue, ref)),
-        )
-    )),
-    Effect.map(({ queue }) => queue),
-) as Effect.Effect<Queue.Queue<Result<A, E, P>>, never, Scope.Scope>
+    forkEffectDequeue.OutputContext<R>
+> => Effect.all([
+    Ref.make<Result<A, E, P>>(initial()),
+    Queue.unbounded<Result<A, E, P>>(),
+]).pipe(
+    Effect.tap(([ref, queue]) => Effect.forkScoped(State<A, E, P>().pipe(
+        Effect.andThen(state => state.set(running(options?.initialProgress)).pipe(
+            Effect.andThen(effect),
+            Effect.onExit(exit => Effect.andThen(state.set(fromExit(exit)), Queue.shutdown(queue))),
+        )),
+        Effect.provide(Layer.empty.pipe(
+            Layer.provideMerge(makeProgressLayer<A, E, P>()),
+            Layer.provideMerge(Layer.succeed(State<A, E, P>(), {
+                get: ref,
+                set: v => Effect.andThen(Ref.set(ref, v), Queue.offer(queue, v))
+            })),
+        )),
+    ))),
+    Effect.map(([, queue]) => queue),
+) as Effect.Effect<Queue.Dequeue<Result<A, E, P>>, never, Scope.Scope>
