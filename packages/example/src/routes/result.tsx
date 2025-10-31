@@ -38,10 +38,8 @@ const ResultView = Component.makeUntraced("Result")(function*() {
             )}
         </Container>
     )
-}).pipe(
-    Component.withRuntime(runtime.context)
-)
+})
 
 export const Route = createFileRoute("/result")({
-    component: ResultView
+    component: Component.withRuntime(ResultView, runtime.context)
 })
