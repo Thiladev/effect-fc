@@ -28,11 +28,11 @@ export class TextFieldFormInput extends Component.makeUntraced("TextFieldFormInp
         // biome-ignore lint/correctness/useHookAtTopLevel: "optional" reactivity not supported
         : { optional: false, ...yield* Form.useInput(props.field, props) }
 
-    const [issues, isValidating, isSubmitting] = yield* Subscribable.useSubscribables(
+    const [issues, isValidating, isSubmitting] = yield* Subscribable.useSubscribables([
         props.field.issuesSubscribable,
         props.field.isValidatingSubscribable,
         props.field.isSubmittingSubscribable,
-    )
+    ])
 
     return (
         <Flex direction="column" gap="1">

@@ -50,10 +50,10 @@ class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
 class RegisterFormView extends Component.makeUntraced("RegisterFormView")(function*() {
     const form = yield* RegisterForm
     const submit = yield* Form.useSubmit(form)
-    const [canSubmit, submitResult] = yield* Subscribable.useSubscribables(
+    const [canSubmit, submitResult] = yield* Subscribable.useSubscribables([
         form.canSubmitSubscribable,
         form.submitResultRef,
-    )
+    ])
 
     const TextFieldFormInputFC = yield* TextFieldFormInput
 

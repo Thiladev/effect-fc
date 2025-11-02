@@ -78,11 +78,11 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
         ] as const
     }), [props._tag, props._tag === "edit" ? props.id : undefined])
 
-    const [index, size, canSubmit] = yield* Subscribable.useSubscribables(
+    const [index, size, canSubmit] = yield* Subscribable.useSubscribables([
         indexRef,
         state.sizeSubscribable,
         form.canSubmitSubscribable,
-    )
+    ])
     const submit = yield* Form.useSubmit(form)
     const TextFieldFormInputFC = yield* TextFieldFormInput
 
