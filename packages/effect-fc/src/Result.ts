@@ -239,7 +239,10 @@ export const forkEffectDequeue = <A, E, R, P = never>(
     Effect.tap(([ref, queue]) => Effect.forkScoped(State<A, E, P>().pipe(
         Effect.andThen(state => state.set(running(options?.initialProgress)).pipe(
             Effect.andThen(effect),
-            Effect.onExit(exit => Effect.andThen(state.set(fromExit(exit)), Queue.shutdown(queue))),
+            Effect.onExit(exit => Effect.andThen(
+                state.set(fromExit(exit)),
+                Effect.forkScoped(Queue.shutdown(queue)),
+            )),
         )),
         Effect.provide(Layer.empty.pipe(
             Layer.provideMerge(makeProgressLayer<A, E, P>()),
