@@ -1,4 +1,4 @@
-import { Effect, Equivalence, pipe, type Scope, Stream, Subscribable } from "effect"
+import { Effect, Equivalence, type Scope, Stream, Subscribable } from "effect"
 import * as React from "react"
 import * as Component from "./Component.js"
 
@@ -43,20 +43,12 @@ export const useSubscribables: {
         yield* Component.useOnMount(() => Effect.all(elements.map(v => v.get)))
     )
 
-    yield* Component.useReactEffect(() => Effect.forkScoped(pipe(
-        elements.map(ref => Stream.changesWith(ref.changes, Equivalence.strict())),
-        streams => Stream.zipLatestAll(...streams),
-        Stream.runForEach(v =>
-            Effect.sync(() => setReactStateValue(v))
-        ),
-    )), elements)
-
     yield* Component.useReactEffect(() => Stream.zipLatestAll(...elements.map(ref => ref.changes)).pipe(
-        Stream.changesWith(options?.equivalence ?? Equivalence.array(Equivalence.strict())),
+        Stream.changesWith((options?.equivalence as Equivalence.Equivalence<any[]> | undefined) ?? Equivalence.array(Equivalence.strict())),
         Stream.runForEach(v =>
             Effect.sync(() => setReactStateValue(v))
         ),
-
+        Effect.forkScoped,
     ), elements)
 
     return reactStateValue as any
