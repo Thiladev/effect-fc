@@ -162,6 +162,19 @@ export const submit = <A, I, R, SA, SE, SR>(
             Result.initial() as Result.Result<SA, SE>,
             (_, result) => Effect.as(Ref.set(self.submitResultRef, result), result),
         ),
+        Effect.tap(result => Result.isFailure(result)
+            ? Option.match(
+                Chunk.findFirst(
+                    Cause.failures(result.cause as Cause.Cause<ParseResult.ParseError>),
+                    e => e._tag === "ParseError",
+                ),
+                {
+                    onSome: e => Ref.set(self.errorRef, Option.some(e)),
+                    onNone: () => Effect.void,
+                },
+            )
+            : Effect.void
+        ),
     ),
 
     self.canSubmitSubscribable.get,
