@@ -33,7 +33,7 @@ export const useSubscribables: {
     ): Effect.Effect<
         useSubscribables.Success<T>,
         [T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer E, infer _R> ? E : never,
-        ([T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer _E, infer R> ? R : never) | Scope.Scope
+        Scope.Scope | ([T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer _E, infer R> ? R : never)
     >
 } = Effect.fnUntraced(function* <const T extends readonly Subscribable.Subscribable<any, any, any>[]>(
     elements: T,
