@@ -578,21 +578,17 @@ export const useReactLayoutEffect: {
     React.useLayoutEffect(() => runReactEffect(runtime, f, options), deps)
 })
 
-export const useRunSync: {
-    <R = never>(): Effect.Effect<<A, E = never>(effect: Effect.Effect<A, E, R>) => A, never, Scope.Scope | R>
-} = Effect.fnUntraced(function* <Args extends unknown[], A, E, R>(
-    f: (...args: Args) => Effect.Effect<A, E, R>,
-    deps: React.DependencyList,
-) {
-    // biome-ignore lint/style/noNonNullAssertion: context initialization
-    const runtimeRef = React.useRef<Runtime.Runtime<R>>(null!)
-    runtimeRef.current = yield* Effect.runtime<R>()
+export const useRunSync = <R = never>(): Effect.Effect<
+    <A, E = never>(effect: Effect.Effect<A, E, Scope.Scope | R>) => A,
+    never,
+    Scope.Scope | R
+> => Effect.andThen(Effect.runtime(), Runtime.runSync)
 
-    Runtime.runSync()
-
-    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
-    return React.useCallback((...args: Args) => Runtime.runSync(runtimeRef.current)(f(...args)), deps)
-})
+export const useRunPromise = <R = never>(): Effect.Effect<
+    <A, E = never>(effect: Effect.Effect<A, E, Scope.Scope | R>) => Promise<A>,
+    never,
+    Scope.Scope | R
+> => Effect.andThen(Effect.runtime(), context => Runtime.runPromise(context))
 
 export const useCallbackSync: {
     <Args extends unknown[], A, E, R>(
