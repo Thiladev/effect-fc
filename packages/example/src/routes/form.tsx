@@ -39,10 +39,10 @@ class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
         ),
 
         initialEncodedValue: { email: "", password: "", birth: Option.none() },
-        onSubmit: v => Effect.sleep("500 millis").pipe(
-            Effect.andThen(Console.log(v)),
-            Effect.andThen(Effect.sync(() => alert("Done!"))),
-        ),
+        onSubmit: Effect.fnUntraced(function*(v) {
+            yield* Effect.sleep("500 millis")
+            return v
+        }),
         debounce: "500 millis",
     })
 }) {}
@@ -93,7 +93,7 @@ class RegisterFormView extends Component.makeUntraced("RegisterFormView")(functi
                 Match.tag("Initial", () => <></>),
                 Match.tag("Running", () => <Text>Submitting...</Text>),
                 Match.tag("Success", () => <Text>Submitted successfully!</Text>),
-                Match.tag("Failure", v => <Text>Error: {v.cause.toString()}</Text>),
+                Match.tag("Failure", e => <Text>Error: {e.cause.toString()}</Text>),
                 Match.exhaustive,
             )}
         </Container>

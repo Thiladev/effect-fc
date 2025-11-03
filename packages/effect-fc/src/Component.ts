@@ -490,7 +490,7 @@ export const useOnMount: {
 })
 
 export namespace useOnChange {
-    export type Options = useScope.Options
+    export interface Options extends useScope.Options {}
 }
 
 export const useOnChange: {
@@ -578,6 +578,22 @@ export const useReactLayoutEffect: {
     React.useLayoutEffect(() => runReactEffect(runtime, f, options), deps)
 })
 
+export const useRunSync: {
+    <R = never>(): Effect.Effect<<A, E = never>(effect: Effect.Effect<A, E, R>) => A, never, Scope.Scope | R>
+} = Effect.fnUntraced(function* <Args extends unknown[], A, E, R>(
+    f: (...args: Args) => Effect.Effect<A, E, R>,
+    deps: React.DependencyList,
+) {
+    // biome-ignore lint/style/noNonNullAssertion: context initialization
+    const runtimeRef = React.useRef<Runtime.Runtime<R>>(null!)
+    runtimeRef.current = yield* Effect.runtime<R>()
+
+    Runtime.runSync()
+
+    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
+    return React.useCallback((...args: Args) => Runtime.runSync(runtimeRef.current)(f(...args)), deps)
+})
+
 export const useCallbackSync: {
     <Args extends unknown[], A, E, R>(
         f: (...args: Args) => Effect.Effect<A, E, R>,
@@ -613,13 +629,13 @@ export const useCallbackPromise: {
 })
 
 export namespace useContext {
-    export type Options = useOnChange.Options
+    export interface Options extends useOnChange.Options {}
 }
 
 export const useContext = <ROut, E, RIn>(
     layer: Layer.Layer<ROut, E, RIn>,
     options?: useContext.Options,
-): Effect.Effect<Context.Context<ROut>, E, RIn> => useOnChange(() => Effect.context<RIn>().pipe(
+): Effect.Effect<Context.Context<ROut>, E, Scope.Scope | RIn> => useOnChange(() => Effect.context<RIn>().pipe(
     Effect.map(context => ManagedRuntime.make(Layer.provide(layer, Layer.succeedContext(context)))),
     Effect.tap(runtime => Effect.addFinalizer(() => runtime.disposeEffect)),
     Effect.andThen(runtime => runtime.runtimeEffect),
