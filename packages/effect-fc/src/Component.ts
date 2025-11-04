@@ -559,7 +559,7 @@ const runReactEffect = <E, R>(
 )
 
 export namespace useReactLayoutEffect {
-    export type Options = useReactEffect.Options
+    export interface Options extends useReactEffect.Options {}
 }
 
 export const useReactLayoutEffect: {
