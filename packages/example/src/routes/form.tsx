@@ -49,12 +49,12 @@ class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
 
 class RegisterFormView extends Component.makeUntraced("RegisterFormView")(function*() {
     const form = yield* RegisterForm
-    const submit = yield* Form.useSubmit(form)
     const [canSubmit, submitResult] = yield* Subscribable.useSubscribables([
         form.canSubmitSubscribable,
         form.submitResultRef,
     ])
 
+    const runPromise = yield* Component.useRunPromise()
     const TextFieldFormInputFC = yield* TextFieldFormInput
 
     yield* Component.useOnMount(() => Effect.gen(function*() {
@@ -67,7 +67,7 @@ class RegisterFormView extends Component.makeUntraced("RegisterFormView")(functi
         <Container width="300">
             <form onSubmit={e => {
                 e.preventDefault()
-                void submit()
+                void runPromise(Form.submit(form))
             }}>
                 <Flex direction="column" gap="2">
                     <TextFieldFormInputFC
