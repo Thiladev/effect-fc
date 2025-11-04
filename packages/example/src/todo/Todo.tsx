@@ -1,6 +1,6 @@
 import { Box, Button, Flex, IconButton } from "@radix-ui/themes"
 import { GetRandomValues, makeUuid4 } from "@typed/id"
-import { Chunk, Effect, Match, Option, Ref, Runtime, Schema, Stream } from "effect"
+import { Chunk, type DateTime, Effect, Match, Option, Ref, Schema, Stream } from "effect"
 import { Component, Form, Subscribable } from "effect-fc"
 import { FaArrowDown, FaArrowUp } from "react-icons/fa"
 import { FaDeleteLeft } from "react-icons/fa6"
@@ -31,7 +31,6 @@ export type TodoProps = (
 )
 
 export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoProps) {
-    const runtime = yield* Effect.runtime()
     const state = yield* TodosState
 
     const [
@@ -83,7 +82,9 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
         state.sizeSubscribable,
         form.canSubmitSubscribable,
     ])
-    const submit = yield* Form.useSubmit(form)
+
+    const runSync = yield* Component.useRunSync()
+    const runPromise = yield* Component.useRunPromise<DateTime.CurrentTimeZone>()
     const TextFieldFormInputFC = yield* TextFieldFormInput
 
 
@@ -102,7 +103,7 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
                         />
 
                         {props._tag === "new" &&
-                            <Button disabled={!canSubmit} onClick={() => submit()}>
+                            <Button disabled={!canSubmit} onClick={() => void runPromise(Form.submit(form))}>
                                 Add
                             </Button>
                         }
@@ -114,19 +115,19 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
                 <Flex direction="column" justify="center" align="center" gap="1">
                     <IconButton
                         disabled={index <= 0}
-                        onClick={() => Runtime.runSync(runtime)(state.moveLeft(props.id))}
+                        onClick={() => runSync(state.moveLeft(props.id))}
                     >
                         <FaArrowUp />
                     </IconButton>
 
                     <IconButton
                         disabled={index >= size - 1}
-                        onClick={() => Runtime.runSync(runtime)(state.moveRight(props.id))}
+                        onClick={() => runSync(state.moveRight(props.id))}
                     >
                         <FaArrowDown />
                     </IconButton>
 
-                    <IconButton onClick={() => Runtime.runSync(runtime)(state.remove(props.id))}>
+                    <IconButton onClick={() => runSync(state.remove(props.id))}>
                         <FaDeleteLeft />
                     </IconButton>
                 </Flex>
