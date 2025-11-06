@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
-import { Effect, Layer, ManagedRuntime, Predicate, type Runtime } from "effect"
+import { Effect, Layer, ManagedRuntime, Predicate, Runtime, Scope } from "effect"
 import * as React from "react"
 import * as Component from "./Component.js"
 import * as ErrorObserver from "./ErrorObserver.js"
@@ -60,16 +60,20 @@ export const Provider = <R, ER>(
     )
 }
 
-interface ProviderInnerProps<R, ER> {
-    readonly runtime: ReactRuntime<R, ER>
-    readonly promise: Promise<Runtime.Runtime<R>>
-    readonly children?: React.ReactNode
-}
-
 const ProviderInner = <R, ER>(
-    { runtime, promise, children }: ProviderInnerProps<R, ER>
-): React.ReactNode => React.createElement(
-    runtime.context,
-    { value: React.use(promise) },
-    children,
-)
+    { runtime, promise, children }: {
+        readonly runtime: ReactRuntime<R, ER>
+        readonly promise: Promise<Runtime.Runtime<R>>
+        readonly children?: React.ReactNode
+    }
+): React.ReactNode => {
+    const effectRuntime = React.use(promise)
+    const scope = Runtime.runSync(effectRuntime)(Component.useScope([effectRuntime]))
+    Runtime.runSync(effectRuntime)(Effect.provideService(
+        Component.useOnChange(() => Effect.addFinalizer(() => runtime.runtime.disposeEffect), [scope]),
+        Scope.Scope,
+        scope,
+    ))
+
+    return React.createElement(runtime.context, { value: effectRuntime }, children)
+}
