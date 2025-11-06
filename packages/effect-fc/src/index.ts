@@ -1,5 +1,6 @@
 export * as Async from "./Async.js"
 export * as Component from "./Component.js"
+export * as ErrorObserver from "./ErrorObserver.js"
 export * as Form from "./Form.js"
 export * as Memoized from "./Memoized.js"
 export * as PropertyPath from "./PropertyPath.js"

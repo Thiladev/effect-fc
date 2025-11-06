@@ -2,6 +2,7 @@
 import { Effect, Layer, ManagedRuntime, Predicate, type Runtime } from "effect"
 import * as React from "react"
 import * as Component from "./Component.js"
+import * as ErrorObserver from "./ErrorObserver.js"
 
 
 export const TypeId: unique symbol = Symbol.for("@effect-fc/ReactRuntime/ReactRuntime")
@@ -16,16 +17,21 @@ export interface ReactRuntime<R, ER> {
 
 const ReactRuntimeProto = Object.freeze({ [TypeId]: TypeId } as const)
 
+export const Prelude: Layer.Layer<Component.ScopeMap | ErrorObserver.ErrorObserver> = Layer.mergeAll(
+    Component.ScopeMap.Default,
+    ErrorObserver.layer,
+)
+
 
 export const isReactRuntime = (u: unknown): u is ReactRuntime<unknown, unknown> => Predicate.hasProperty(u, TypeId)
 
 export const make = <R, ER>(
     layer: Layer.Layer<R, ER>,
     memoMap?: Layer.MemoMap,
-): ReactRuntime<R | Component.ScopeMap, ER> => Object.setPrototypeOf(
+): ReactRuntime<Layer.Layer.Success<typeof Prelude> | R, ER> => Object.setPrototypeOf(
     Object.assign(function() {}, {
         runtime: ManagedRuntime.make(
-            Layer.merge(layer, Component.ScopeMap.Default),
+            Layer.merge(layer, Prelude),
             memoMap,
         ),
         // biome-ignore lint/style/noNonNullAssertion: context initialization

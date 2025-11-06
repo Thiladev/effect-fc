@@ -1,24 +1,46 @@
-import { type Cause, Context, type Effect, Layer, type Queue, type Scope } from "effect"
+import { type Cause, Context, Effect, Layer, Option, Pipeable, Predicate, PubSub, type Queue, type Scope } from "effect"
 
 
-export interface ErrorObserver<E = never> {
-    handle<Eff extends Effect.Effect<any, any, any>>(effect: Eff): Eff
+export const TypeId: unique symbol = Symbol.for("@effect-fc/ErrorObserver/ErrorObserver")
+export type TypeId = typeof TypeId
+
+export interface ErrorObserver<in out E = never> extends Pipeable.Pipeable {
+    readonly [TypeId]: TypeId
+    handle<A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R>
     readonly subscribe: Effect.Effect<Queue.Dequeue<Cause.Cause<E>>, never, Scope.Scope>
 }
 
-export const ErrorObserver = <E = never>(): Context.Tag<ErrorObserver<E>, ErrorObserver<E>> => Context.GenericTag("@effect-fc/ErrorObserver/ErrorObserver")
+export const ErrorObserver = <E = never>(): Context.Tag<ErrorObserver, ErrorObserver<E>> => Context.GenericTag("@effect-fc/ErrorObserver/ErrorObserver")
 
+class ErrorObserverImpl<in out E = never>
+extends Pipeable.Class() implements ErrorObserver<E> {
+    readonly [TypeId]: TypeId = TypeId
+    readonly subscribe: Effect.Effect<Queue.Dequeue<Cause.Cause<E>>, never, Scope.Scope>
 
-export namespace make {
-    export type Handler<EIn, EOut> = (
-        self: Effect.Effect<never, NoInfer<EIn>>,
-        push: {
-            failure(failure: NoInfer<EIn>): Effect.Effect<never>
-            defect(defect: unknown): Effect.Effect<never>
-        },
-    ) => Effect.Effect<EOut>
+    constructor(
+        private readonly pubsub: PubSub.PubSub<Cause.Cause<E>>
+    ) {
+        super()
+        this.subscribe = pubsub.subscribe
+    }
+
+    handle<A, EffE, R>(effect: Effect.Effect<A, EffE, R>): Effect.Effect<A, EffE, R> {
+        return Effect.tapErrorCause(effect, cause => PubSub.publish(this.pubsub, cause as Cause.Cause<E>))
+    }
 }
 
-export const make = <EIn = never>() => <EOut>(
-    f: make.Handler<NoInfer<EIn>, EOut>
-): Effect.Effect<ErrorObserver<EIn, EOut>> =>
+
+export const isErrorObserver = (u: unknown): u is ErrorObserver<unknown> => Predicate.hasProperty(u, TypeId)
+
+export const layer: Layer.Layer<ErrorObserver> = Layer.effect(ErrorObserver(), Effect.andThen(
+    PubSub.unbounded<Cause.Cause<never>>(),
+    pubsub => new ErrorObserverImpl(pubsub),
+))
+
+export const handle = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> => Effect.andThen(
+    Effect.serviceOption(ErrorObserver()),
+    Option.match({
+        onSome: observer => observer.handle(effect),
+        onNone: () => effect,
+    }),
+)
