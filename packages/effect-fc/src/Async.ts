@@ -2,6 +2,7 @@
 import { Effect, Function, Predicate, Runtime, Scope } from "effect"
 import * as React from "react"
 import * as Component from "./Component.js"
+import * as ErrorObserver from "./ErrorObserver.js"
 
 
 export const TypeId: unique symbol = Symbol.for("@effect-fc/Async/Async")
@@ -31,10 +32,10 @@ const SuspenseProto = Object.freeze({
 
         return ({ fallback, name, ...props }: Async.Props) => {
             const promise = Runtime.runPromise(runtimeRef.current)(
-                Effect.andThen(
+                ErrorObserver.handle(Effect.andThen(
                     Component.useScope([], this),
                     scope => Effect.provideService(this.body(props as P), Scope.Scope, scope),
-                )
+                ))
             )
 
             return React.createElement(
