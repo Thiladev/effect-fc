@@ -1,8 +1,8 @@
-import { HttpClient } from "@effect/platform"
+import { HttpClient, type HttpClientError } from "@effect/platform"
 import { Container, Heading, Text } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
-import { Effect, Match, Schema } from "effect"
-import { Component, Result, Subscribable } from "effect-fc"
+import { Cause, Chunk, Console, Effect, flow, Match, Option, Schema, Stream } from "effect"
+import { Component, ErrorObserver, Result, Subscribable } from "effect-fc"
 import { runtime } from "@/runtime"
 
 
@@ -22,6 +22,21 @@ const ResultView = Component.makeUntraced("Result")(function*() {
         Result.forkEffect,
     ))
     const [result] = yield* Subscribable.useSubscribables([resultSubscribable])
+
+    yield* Component.useOnMount(() => ErrorObserver.ErrorObserver<HttpClientError.HttpClientError>().pipe(
+        Effect.andThen(observer => observer.subscribe),
+        Effect.andThen(Stream.fromQueue),
+        Stream.unwrap,
+        Stream.runForEach(flow(
+            Cause.failures,
+            Chunk.findFirst(e => e._tag === "RequestError" || e._tag === "ResponseError"),
+            Option.match({
+                onSome: e => Console.log("ResultView HttpClient error", e),
+                onNone: () => Effect.void,
+            }),
+        )),
+        Effect.forkScoped,
+    ))
 
     return (
         <Container>
