@@ -2,7 +2,6 @@
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
 import { Context, type Duration, Effect, Effectable, Equivalence, ExecutionStrategy, Exit, Fiber, Function, HashMap, Layer, ManagedRuntime, Option, Predicate, Ref, Runtime, Scope, Tracer, type Utils } from "effect"
 import * as React from "react"
-import * as ErrorObserver from "./ErrorObserver.js"
 import { Memoized } from "./index.js"
 
 
@@ -76,10 +75,10 @@ const ComponentProto = Object.freeze({
         runtimeRef: React.RefObject<Runtime.Runtime<Exclude<R, Scope.Scope>>>,
     ) {
         return (props: P) => Runtime.runSync(runtimeRef.current)(
-            ErrorObserver.handle(Effect.andThen(
+            Effect.andThen(
                 useScope([], this),
                 scope => Effect.provideService(this.body(props), Scope.Scope, scope),
-            ))
+            )
         )
     },
 } as const)
@@ -548,15 +547,14 @@ const runReactEffect = <E, R>(
         () => {
             switch (options?.finalizerExecutionMode ?? "fork") {
                 case "sync":
-                    Runtime.runSync(runtime)(ErrorObserver.handle(Scope.close(scope, Exit.void)))
+                    Runtime.runSync(runtime)(Scope.close(scope, Exit.void))
                     break
                 case "fork":
-                    Runtime.runFork(runtime)(ErrorObserver.handle(Scope.close(scope, Exit.void)))
+                    Runtime.runFork(runtime)(Scope.close(scope, Exit.void))
                     break
             }
         }
     ),
-    ErrorObserver.handle,
     Runtime.runSync(runtime),
 )
 
