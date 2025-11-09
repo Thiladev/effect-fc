@@ -23,6 +23,20 @@ const RegisterFormSchema = Schema.Struct({
     birth: Schema.OptionFromSelf(DateTimeUtcFromZonedInput),
 })
 
+const RegisterFormSubmitSchema = Schema.Struct({
+    ...RegisterFormSchema.fields,
+    email: Schema.transformOrFail(
+        Schema.encodedSchema(RegisterFormSchema.fields.email),
+        Schema.typeSchema(RegisterFormSchema.fields.email),
+        {
+            decode: (input, _options, ast) => input !== "admin@admin.com"
+                ? ParseResult.succeed(input)
+                : ParseResult.fail(new ParseResult.Refinement(ast, input, "Predicate", "This email is already in use.")),
+            encode: ParseResult.succeed,
+        },
+    ),
+})
+
 class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
     scoped: Form.service({
         schema: RegisterFormSchema.pipe(
