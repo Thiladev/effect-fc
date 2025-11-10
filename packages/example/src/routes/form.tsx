@@ -24,17 +24,18 @@ const RegisterFormSchema = Schema.Struct({
 })
 
 const RegisterFormSubmitSchema = Schema.Struct({
-    ...RegisterFormSchema.fields,
     email: Schema.transformOrFail(
-        Schema.encodedSchema(RegisterFormSchema.fields.email),
-        Schema.typeSchema(RegisterFormSchema.fields.email),
+        Schema.String,
+        Schema.String,
         {
             decode: (input, _options, ast) => input !== "admin@admin.com"
                 ? ParseResult.succeed(input)
-                : ParseResult.fail(new ParseResult.Refinement(ast, input, "Predicate", "This email is already in use.")),
+                : ParseResult.fail(new ParseResult.Type(ast, input, "This email is already in use.")),
             encode: ParseResult.succeed,
         },
     ),
+    password: Schema.String,
+    birth: Schema.OptionFromSelf(Schema.DateTimeUtcFromSelf),
 })
 
 class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
@@ -55,7 +56,7 @@ class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
         initialEncodedValue: { email: "", password: "", birth: Option.none() },
         onSubmit: Effect.fnUntraced(function*(v) {
             yield* Effect.sleep("500 millis")
-            return v
+            return yield* Schema.decode(RegisterFormSubmitSchema)(v)
         }),
         debounce: "500 millis",
     })
