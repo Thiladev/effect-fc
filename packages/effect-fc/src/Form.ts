@@ -24,7 +24,7 @@ extends Pipeable.Pipeable {
     readonly valueRef: SubscriptionRef.SubscriptionRef<Option.Option<A>>
     readonly encodedValueRef: SubscriptionRef.SubscriptionRef<I>
     readonly errorRef: SubscriptionRef.SubscriptionRef<Option.Option<ParseResult.ParseError>>
-    readonly validationFiberRef: SubscriptionRef.SubscriptionRef<Option.Option<Fiber.Fiber<void, never>>>
+    readonly validationFiberRef: SubscriptionRef.SubscriptionRef<Option.Option<Fiber.Fiber<A, ParseResult.ParseError>>>
     readonly submitResultRef: SubscriptionRef.SubscriptionRef<Result.Result<SA, SE>>
 
     readonly canSubmitSubscribable: Subscribable.Subscribable<boolean>
@@ -43,7 +43,7 @@ extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR> {
         readonly valueRef: SubscriptionRef.SubscriptionRef<Option.Option<A>>,
         readonly encodedValueRef: SubscriptionRef.SubscriptionRef<I>,
         readonly errorRef: SubscriptionRef.SubscriptionRef<Option.Option<ParseResult.ParseError>>,
-        readonly validationFiberRef: SubscriptionRef.SubscriptionRef<Option.Option<Fiber.Fiber<void, never>>>,
+        readonly validationFiberRef: SubscriptionRef.SubscriptionRef<Option.Option<Fiber.Fiber<A, ParseResult.ParseError>>>,
         readonly submitResultRef: SubscriptionRef.SubscriptionRef<Result.Result<SA, SE>>,
 
         readonly canSubmitSubscribable: Subscribable.Subscribable<boolean>,
@@ -76,7 +76,7 @@ export const make: {
 ) {
     const valueRef = yield* SubscriptionRef.make(Option.none<A>())
     const errorRef = yield* SubscriptionRef.make(Option.none<ParseResult.ParseError>())
-    const validationFiberRef = yield* SubscriptionRef.make(Option.none<Fiber.Fiber<void, never>>())
+    const validationFiberRef = yield* SubscriptionRef.make(Option.none<Fiber.Fiber<A, ParseResult.ParseError>>())
     const submitResultRef = yield* SubscriptionRef.make<Result.Result<SA, SE>>(Result.initial())
 
     return new FormImpl(
@@ -116,35 +116,31 @@ export const run = <A, I, R, SA, SE, SR>(
             onNone: () => Effect.void,
         })),
         Effect.andThen(
-            Effect.addFinalizer(() => Ref.set(self.validationFiberRef, Option.none())).pipe(
-                Effect.andThen(Schema.decode(self.schema, { errors: "all" })(encodedValue)),
-                Effect.exit,
-                Effect.andThen(flow(
-                    Exit.matchEffect({
-                        onSuccess: v => Ref.set(self.valueRef, Option.some(v)).pipe(
-                            Effect.andThen(Ref.set(self.errorRef, Option.none())),
-                            Effect.as(Option.some(v)),
+            Effect.forkScoped(Effect.onExit(
+                Schema.decode(self.schema, { errors: "all" })(encodedValue),
+                exit => Effect.andThen(
+                    Exit.matchEffect(exit, {
+                        onSuccess: v => Effect.andThen(
+                            Ref.set(self.valueRef, Option.some(v)),
+                            Ref.set(self.errorRef, Option.none()),
                         ),
-                        onFailure: c => Chunk.findFirst(Cause.failures(c), e => e._tag === "ParseError").pipe(
-                            Option.match({
-                                onSome: e => Ref.set(self.errorRef, Option.some(e)),
-                                onNone: () => Effect.void,
-                            }),
-                            Effect.as(Option.none<A>()),
-                        ),
+                        onFailure: c => Option.match(Chunk.findFirst(Cause.failures(c), e => e._tag === "ParseError"), {
+                            onSome: e => Ref.set(self.errorRef, Option.some(e)),
+                            onNone: () => Effect.void,
+                        }),
                     }),
-                    Effect.uninterruptible,
-                )),
-                Effect.scoped,
-
-                Effect.andThen(value => Option.isSome(value) && self.autosubmit
+                    Ref.set(self.validationFiberRef, Option.none()),
+                ),
+            )).pipe(
+                Effect.tap(fiber => Ref.set(self.validationFiberRef, Option.some(fiber))),
+                Effect.andThen(Fiber.join),
+                Effect.andThen(() => self.autosubmit
                     ? Effect.asVoid(Effect.forkScoped(submit(self)))
                     : Effect.void
                 ),
                 Effect.forkScoped,
             )
         ),
-        Effect.andThen(fiber => Ref.set(self.validationFiberRef, Option.some(fiber)))
     ),
 )
 
