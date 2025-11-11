@@ -12,7 +12,7 @@ import * as SubscriptionSubRef from "./SubscriptionSubRef.js"
 export const FormTypeId: unique symbol = Symbol.for("@effect-fc/Form/Form")
 export type FormTypeId = typeof FormTypeId
 
-export interface Form<in out A, in out I = A, out R = never, in out SA = void, in out SE = A, out SR = never>
+export interface Form<in out A, in out I = A, out R = never, in out SA = void, in out SE = A, out SR = never, out SP = never>
 extends Pipeable.Pipeable {
     readonly [FormTypeId]: FormTypeId
 
@@ -30,7 +30,7 @@ extends Pipeable.Pipeable {
     readonly canSubmitSubscribable: Subscribable.Subscribable<boolean>
 }
 
-class FormImpl<in out A, in out I = A, out R = never, in out SA = void, in out SE = A, out SR = never>
+class FormImpl<in out A, in out I = A, out R = never, in out SA = void, in out SE = A, out SR = never, out SP = never>
 extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR> {
     readonly [FormTypeId]: FormTypeId = FormTypeId
 
@@ -55,7 +55,7 @@ extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR> {
 export const isForm = (u: unknown): u is Form<unknown, unknown, unknown, unknown, unknown, unknown> => Predicate.hasProperty(u, FormTypeId)
 
 export namespace make {
-    export interface Options<in out A, in out I, in out R, in out SA = void, in out SE = A, out SR = never> {
+    export interface Options<in out A, in out I, in out R, in out SA = void, in out SE = A, out SR = never, out SP = never> {
         readonly schema: Schema.Schema<A, I, R>
         readonly initialEncodedValue: NoInfer<I>
         readonly onSubmit: (
