@@ -149,11 +149,12 @@ export const submit = <A, I, R, SA, SE, SR>(
 ): Effect.Effect<Option.Option<Result.Result<SA, SE>>, NoSuchElementException, Scope.Scope | SR> => Effect.whenEffect(
     self.valueRef.pipe(
         Effect.andThen(identity),
-        Effect.andThen(value => Result.forkEffectDequeue(
-            self.onSubmit(value) as Effect.Effect<SA, SE, Result.forkEffectDequeue.InputContext<SR, never>>)
+        Effect.andThen(value => Result.forkEffectPubSub(
+            self.onSubmit(value) as Effect.Effect<SA, SE, Result.forkEffectPubSub.InputContext<SR, never>>)
         ),
+        Effect.andThen(identity),
         Effect.andThen(Stream.fromQueue),
-        Stream.unwrap,
+        Stream.unwrapScoped,
         Stream.runFoldEffect(
             Result.initial() as Result.Result<SA, SE>,
             (_, result) => Effect.as(Ref.set(self.submitResultRef, result), result),
