@@ -19,14 +19,14 @@ const ResultView = Component.makeUntraced("Result")(function*() {
         Effect.andThen(response => response.json),
         Effect.andThen(Schema.decodeUnknown(Post)),
         Effect.tap(Effect.sleep("250 millis")),
-        Result.forkEffect,
+        Result.forkEffectSubscriptionRef,
     ))
     const [result] = yield* Subscribable.useSubscribables([resultSubscribable])
 
     yield* Component.useOnMount(() => ErrorObserver.ErrorObserver<HttpClientError.HttpClientError>().pipe(
         Effect.andThen(observer => observer.subscribe),
         Effect.andThen(Stream.fromQueue),
-        Stream.unwrap,
+        Stream.unwrapScoped,
         Stream.runForEach(flow(
             Cause.failures,
             Chunk.findFirst(e => e._tag === "RequestError" || e._tag === "ResponseError"),
