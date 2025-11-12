@@ -1,6 +1,6 @@
 import { Array, Cause, Chunk, type Duration, Effect, Equal, Exit, Fiber, flow, identity, Option, ParseResult, Pipeable, Predicate, Ref, Schema, type Scope, Stream } from "effect"
 import type { NoSuchElementException } from "effect/Cause"
-import * as React from "react"
+import type * as React from "react"
 import * as Component from "./Component.js"
 import * as PropertyPath from "./PropertyPath.js"
 import * as Result from "./Result.js"
@@ -12,12 +12,13 @@ import * as SubscriptionSubRef from "./SubscriptionSubRef.js"
 export const FormTypeId: unique symbol = Symbol.for("@effect-fc/Form/Form")
 export type FormTypeId = typeof FormTypeId
 
-export interface Form<in out A, in out I = A, out R = never, in out SA = void, in out SE = A, out SR = never, out SP = never>
+export interface Form<in out A, in out I = A, out R = never, in out SA = void, in out SE = A, out SR = never, in out SP = never>
 extends Pipeable.Pipeable {
     readonly [FormTypeId]: FormTypeId
 
     readonly schema: Schema.Schema<A, I, R>
     readonly onSubmit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>
+    readonly initialSubmitProgress: SP
     readonly autosubmit: boolean
     readonly debounce: Option.Option<Duration.DurationInput>
 
@@ -25,18 +26,19 @@ extends Pipeable.Pipeable {
     readonly encodedValueRef: SubscriptionRef.SubscriptionRef<I>
     readonly errorRef: SubscriptionRef.SubscriptionRef<Option.Option<ParseResult.ParseError>>
     readonly validationFiberRef: SubscriptionRef.SubscriptionRef<Option.Option<Fiber.Fiber<A, ParseResult.ParseError>>>
-    readonly submitResultRef: SubscriptionRef.SubscriptionRef<Result.Result<SA, SE>>
+    readonly submitResultRef: SubscriptionRef.SubscriptionRef<Result.Result<SA, SE, SP>>
 
     readonly canSubmitSubscribable: Subscribable.Subscribable<boolean>
 }
 
-class FormImpl<in out A, in out I = A, out R = never, in out SA = void, in out SE = A, out SR = never, out SP = never>
-extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR> {
+class FormImpl<in out A, in out I = A, out R = never, in out SA = void, in out SE = A, out SR = never, in out SP = never>
+extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR, SP> {
     readonly [FormTypeId]: FormTypeId = FormTypeId
 
     constructor(
         readonly schema: Schema.Schema<A, I, R>,
         readonly onSubmit: (value: NoInfer<A>) => Effect.Effect<SA, SE, SR>,
+        readonly initialSubmitProgress: SP,
         readonly autosubmit: boolean,
         readonly debounce: Option.Option<Duration.DurationInput>,
 
@@ -44,7 +46,7 @@ extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR> {
         readonly encodedValueRef: SubscriptionRef.SubscriptionRef<I>,
         readonly errorRef: SubscriptionRef.SubscriptionRef<Option.Option<ParseResult.ParseError>>,
         readonly validationFiberRef: SubscriptionRef.SubscriptionRef<Option.Option<Fiber.Fiber<A, ParseResult.ParseError>>>,
-        readonly submitResultRef: SubscriptionRef.SubscriptionRef<Result.Result<SA, SE>>,
+        readonly submitResultRef: SubscriptionRef.SubscriptionRef<Result.Result<SA, SE, SP>>,
 
         readonly canSubmitSubscribable: Subscribable.Subscribable<boolean>,
     ) {
@@ -55,33 +57,31 @@ extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR> {
 export const isForm = (u: unknown): u is Form<unknown, unknown, unknown, unknown, unknown, unknown> => Predicate.hasProperty(u, FormTypeId)
 
 export namespace make {
-    export interface Options<in out A, in out I, in out R, in out SA = void, in out SE = A, out SR = never, out SP = never> {
+    export interface Options<in out A, in out I, in out R, in out SA = void, in out SE = A, out SR = never, in out SP = never> {
         readonly schema: Schema.Schema<A, I, R>
         readonly initialEncodedValue: NoInfer<I>
         readonly onSubmit: (
             this: Form<NoInfer<A>, NoInfer<I>, NoInfer<R>, unknown, unknown, unknown>,
             value: NoInfer<A>,
         ) => Effect.Effect<SA, SE, SR>
+        readonly initialSubmitProgress?: SP
         readonly autosubmit?: boolean
         readonly debounce?: Duration.DurationInput
     }
 }
 
-export const make: {
-    <A, I = A, R = never, SA = void, SE = A, SR = never>(
-        options: make.Options<A, I, R, SA, SE, SR>
-    ): Effect.Effect<Form<A, I, R, SA, SE, SR>>
-} = Effect.fnUntraced(function* <A, I = A, R = never, SA = void, SE = A, SR = never>(
-    options: make.Options<A, I, R, SA, SE, SR>
-) {
+export const make = Effect.fnUntraced(function* <A, I = A, R = never, SA = void, SE = A, SR = never, SP = never>(
+    options: make.Options<A, I, R, SA, SE, SR, SP>
+): Effect.fn.Return<Form<A, I, R, SA, SE, SR, SP>> {
     const valueRef = yield* SubscriptionRef.make(Option.none<A>())
     const errorRef = yield* SubscriptionRef.make(Option.none<ParseResult.ParseError>())
     const validationFiberRef = yield* SubscriptionRef.make(Option.none<Fiber.Fiber<A, ParseResult.ParseError>>())
-    const submitResultRef = yield* SubscriptionRef.make<Result.Result<SA, SE>>(Result.initial())
+    const submitResultRef = yield* SubscriptionRef.make<Result.Result<SA, SE, SP>>(Result.initial())
 
     return new FormImpl(
         options.schema,
         options.onSubmit,
+        options.initialSubmitProgress as SP,
         options.autosubmit ?? false,
         Option.fromNullable(options.debounce),
 
@@ -103,8 +103,8 @@ export const make: {
     )
 })
 
-export const run = <A, I, R, SA, SE, SR>(
-    self: Form<A, I, R, SA, SE, SR>
+export const run = <A, I, R, SA, SE, SR, SP>(
+    self: Form<A, I, R, SA, SE, SR, SP>
 ): Effect.Effect<void, never, Scope.Scope | R | SR> => Stream.runForEach(
     self.encodedValueRef.changes.pipe(
         Option.isSome(self.debounce) ? Stream.debounce(self.debounce.value) : identity
@@ -144,19 +144,24 @@ export const run = <A, I, R, SA, SE, SR>(
     ),
 )
 
-export const submit = <A, I, R, SA, SE, SR>(
-    self: Form<A, I, R, SA, SE, SR>
-): Effect.Effect<Option.Option<Result.Result<SA, SE>>, NoSuchElementException, Scope.Scope | SR> => Effect.whenEffect(
+export const submit = <A, I, R, SA, SE, SR, SP>(
+    self: Form<A, I, R, SA, SE, SR, SP>
+): Effect.Effect<
+    Option.Option<Result.Result<SA, SE, SP>>,
+    NoSuchElementException,
+    Scope.Scope | Result.forkEffectPubSub.OutputContext<SR>
+> => Effect.whenEffect(
     self.valueRef.pipe(
         Effect.andThen(identity),
         Effect.andThen(value => Result.forkEffectPubSub(
-            self.onSubmit(value) as Effect.Effect<SA, SE, Result.forkEffectPubSub.InputContext<SR, never>>)
-        ),
+            self.onSubmit(value) as Effect.Effect<SA, SE, Result.forkEffectPubSub.InputContext<SR, SP>>,
+            { initialProgress: self.initialSubmitProgress },
+        )),
         Effect.andThen(identity),
         Effect.andThen(Stream.fromQueue),
         Stream.unwrapScoped,
         Stream.runFoldEffect(
-            Result.initial() as Result.Result<SA, SE>,
+            Result.initial() as Result.Result<SA, SE, SP>,
             (_, result) => Effect.as(Ref.set(self.submitResultRef, result), result),
         ),
         Effect.tap(result => Result.isFailure(result)
@@ -178,13 +183,13 @@ export const submit = <A, I, R, SA, SE, SR>(
 )
 
 export namespace service {
-    export interface Options<in out A, in out I, in out R, in out SA = void, in out SE = A, out SR = never>
-    extends make.Options<A, I, R, SA, SE, SR> {}
+    export interface Options<in out A, in out I, in out R, in out SA = void, in out SE = A, out SR = never, in out SP = never>
+    extends make.Options<A, I, R, SA, SE, SR, SP> {}
 }
 
-export const service = <A, I = A, R = never, SA = void, SE = A, SR = never>(
-    options: service.Options<A, I, R, SA, SE, SR>
-): Effect.Effect<Form<A, I, R, SA, SE, SR>, never, Scope.Scope | R | SR> => Effect.tap(
+export const service = <A, I = A, R = never, SA = void, SE = A, SR = never, SP = never>(
+    options: service.Options<A, I, R, SA, SE, SR, SP>
+): Effect.Effect<Form<A, I, R, SA, SE, SR, SP>, never, Scope.Scope | R | SR> => Effect.tap(
     make(options),
     form => Effect.forkScoped(run(form)),
 )
@@ -242,23 +247,6 @@ extends Pipeable.Class() implements FormField<A, I> {
 export const isFormField = (u: unknown): u is FormField<unknown, unknown> => Predicate.hasProperty(u, FormFieldTypeId)
 
 
-export const useSubmit = <A, I, R, SA, SE, SR>(
-    self: Form<A, I, R, SA, SE, SR>
-): Effect.Effect<
-    () => Promise<Option.Option<Result.Result<SA, SE>>>,
-    never,
-    Scope.Scope | SR
-> => Component.useCallbackPromise(() => submit(self), [self])
-
-export const useField = <A, I, R, SA, SE, SR, const P extends PropertyPath.Paths<NoInfer<I>>>(
-    self: Form<A, I, R, SA, SE, SR>,
-    path: P,
-): FormField<
-    PropertyPath.ValueFromPath<A, P>,
-    PropertyPath.ValueFromPath<I, P>
-// biome-ignore lint/correctness/useExhaustiveDependencies: individual path components need to be compared
-> => React.useMemo(() => field(self, path), [self, ...path])
-
 export namespace useInput {
     export interface Options {
         readonly debounce?: Duration.DurationInput
@@ -270,15 +258,10 @@ export namespace useInput {
     }
 }
 
-export const useInput: {
-    <A, I>(
-        field: FormField<A, I>,
-        options?: useInput.Options,
-    ): Effect.Effect<useInput.Result<I>, NoSuchElementException, Scope.Scope>
-} = Effect.fnUntraced(function* <A, I>(
+export const useInput = Effect.fnUntraced(function* <A, I>(
     field: FormField<A, I>,
     options?: useInput.Options,
-) {
+): Effect.fn.Return<useInput.Result<I>, NoSuchElementException, Scope.Scope> {
     const internalValueRef = yield* Component.useOnChange(() => Effect.tap(
         Effect.andThen(field.encodedValueRef, SubscriptionRef.make),
         internalValueRef => Effect.forkScoped(Effect.all([
@@ -316,15 +299,10 @@ export namespace useOptionalInput {
     }
 }
 
-export const useOptionalInput: {
-    <A, I>(
-        field: FormField<A, Option.Option<I>>,
-        options: useOptionalInput.Options<I>,
-    ): Effect.Effect<useOptionalInput.Result<I>, NoSuchElementException, Scope.Scope>
-} = Effect.fnUntraced(function* <A, I>(
+export const useOptionalInput = Effect.fnUntraced(function* <A, I>(
     field: FormField<A, Option.Option<I>>,
     options: useOptionalInput.Options<I>,
-) {
+): Effect.fn.Return<useOptionalInput.Result<I>, NoSuchElementException, Scope.Scope> {
     const [enabledRef, internalValueRef] = yield* Component.useOnChange(() => Effect.tap(
         Effect.andThen(
             field.encodedValueRef,
