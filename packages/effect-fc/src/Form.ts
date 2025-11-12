@@ -1,4 +1,4 @@
-import { Array, Cause, Chunk, type Duration, Effect, Equal, Exit, Fiber, flow, identity, Option, ParseResult, Pipeable, Predicate, Ref, Schema, type Scope, Stream } from "effect"
+import { Array, Cause, Chunk, type Duration, Effect, Equal, Exit, Fiber, flow, Hash, identity, Option, ParseResult, Pipeable, Predicate, Ref, Schema, type Scope, Stream } from "effect"
 import type { NoSuchElementException } from "effect/Cause"
 import type * as React from "react"
 import * as Component from "./Component.js"
@@ -51,6 +51,21 @@ extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR, SP> {
         readonly canSubmitSubscribable: Subscribable.Subscribable<boolean>,
     ) {
         super()
+    }
+}
+
+const FormFieldKeySymbol = Symbol.for("@effect-fc/Form/FormFieldKeySymbol")
+class FormFieldKey implements Equal.Equal {
+    [FormFieldKeySymbol] = FormFieldKeySymbol
+    constructor(readonly a: PropertyPath.PropertyPath) {}
+
+    [Equal.symbol](that: Equal.Equal) {
+        return Predicate.hasProperty(that, FormFieldKeySymbol)
+            ? PropertyPath.equivalence(this.a, (that as unknown as FormFieldKey).a)
+            : false
+    }
+    [Hash.symbol]() {
+        return 0
     }
 }
 
@@ -204,8 +219,8 @@ export const service = <A, I = A, R = never, SA = void, SE = A, SR = never, SP =
     form => Effect.forkScoped(run(form)),
 )
 
-export const field = <A, I, R, SA, SE, SR, const P extends PropertyPath.Paths<NoInfer<I>>>(
-    self: Form<A, I, R, SA, SE, SR>,
+export const field = <A, I, R, SA, SE, SR, SP, const P extends PropertyPath.Paths<NoInfer<I>>>(
+    self: Form<A, I, R, SA, SE, SR, SP>,
     path: P,
 ): FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>> => new FormFieldImpl(
     Subscribable.mapEffect(self.valueRef, Option.match({
@@ -255,6 +270,26 @@ extends Pipeable.Class() implements FormField<A, I> {
 }
 
 export const isFormField = (u: unknown): u is FormField<unknown, unknown> => Predicate.hasProperty(u, FormFieldTypeId)
+
+export const makeFormField = <A, I, R, SA, SE, SR, SP, const P extends PropertyPath.Paths<NoInfer<I>>>(
+    self: Form<A, I, R, SA, SE, SR, SP>,
+    path: P,
+): FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>> => new FormFieldImpl(
+    Subscribable.mapEffect(self.valueRef, Option.match({
+        onSome: v => Option.map(PropertyPath.get(v, path), Option.some),
+        onNone: () => Option.some(Option.none()),
+    })),
+    SubscriptionSubRef.makeFromPath(self.encodedValueRef, path),
+    Subscribable.mapEffect(self.errorRef, Option.match({
+        onSome: flow(
+            ParseResult.ArrayFormatter.formatError,
+            Effect.map(Array.filter(issue => PropertyPath.equivalence(issue.path, path))),
+        ),
+        onNone: () => Effect.succeed([]),
+    })),
+    Subscribable.map(self.validationFiberRef, Option.isSome),
+    Subscribable.map(self.submitResultRef, result => Result.isRunning(result) || Result.isRefreshing(result)),
+)
 
 
 export namespace useInput {
