@@ -63,16 +63,20 @@ export namespace make {
         readonly onSubmit: (
             this: Form<NoInfer<A>, NoInfer<I>, NoInfer<R>, unknown, unknown, unknown>,
             value: NoInfer<A>,
-        ) => Effect.Effect<SA, SE, SR>
+        ) => Effect.Effect<SA, SE, Result.forkEffectPubSub.InputContext<SR, NoInfer<SP>>>
         readonly initialSubmitProgress?: SP
         readonly autosubmit?: boolean
         readonly debounce?: Duration.DurationInput
     }
+
+    export type Success<A, I, R, SA = void, SE = A, SR = never, SP = never> = (
+        Form<A, I, R, SA, SE, Exclude<SR, Result.Progress<any> | Result.Progress<never>>, SP>
+    )
 }
 
 export const make = Effect.fnUntraced(function* <A, I = A, R = never, SA = void, SE = A, SR = never, SP = never>(
     options: make.Options<A, I, R, SA, SE, SR, SP>
-): Effect.fn.Return<Form<A, I, R, SA, SE, SR, SP>> {
+): Effect.fn.Return<make.Success<A, I, R, SA, SE, SR, SP>> {
     const valueRef = yield* SubscriptionRef.make(Option.none<A>())
     const errorRef = yield* SubscriptionRef.make(Option.none<ParseResult.ParseError>())
     const validationFiberRef = yield* SubscriptionRef.make(Option.none<Fiber.Fiber<A, ParseResult.ParseError>>())
@@ -80,7 +84,7 @@ export const make = Effect.fnUntraced(function* <A, I = A, R = never, SA = void,
 
     return new FormImpl(
         options.schema,
-        options.onSubmit,
+        options.onSubmit as any,
         options.initialSubmitProgress as SP,
         options.autosubmit ?? false,
         Option.fromNullable(options.debounce),
@@ -149,7 +153,7 @@ export const submit = <A, I, R, SA, SE, SR, SP>(
 ): Effect.Effect<
     Option.Option<Result.Result<SA, SE, SP>>,
     NoSuchElementException,
-    Scope.Scope | Result.forkEffectPubSub.OutputContext<SR>
+    Scope.Scope | SR
 > => Effect.whenEffect(
     self.valueRef.pipe(
         Effect.andThen(identity),
@@ -185,11 +189,17 @@ export const submit = <A, I, R, SA, SE, SR, SP>(
 export namespace service {
     export interface Options<in out A, in out I, in out R, in out SA = void, in out SE = A, out SR = never, in out SP = never>
     extends make.Options<A, I, R, SA, SE, SR, SP> {}
+
+    export type Return<A, I, R, SA = void, SE = A, SR = never, SP = never> = Effect.Effect<
+        Form<A, I, R, SA, SE, Exclude<SR, Result.Progress<any> | Result.Progress<never>>, SP>,
+        never,
+        Scope.Scope | R | Exclude<SR, Result.Progress<any> | Result.Progress<never>>
+    >
 }
 
 export const service = <A, I = A, R = never, SA = void, SE = A, SR = never, SP = never>(
     options: service.Options<A, I, R, SA, SE, SR, SP>
-): Effect.Effect<Form<A, I, R, SA, SE, SR, SP>, never, Scope.Scope | R | SR> => Effect.tap(
+): service.Return<A, I, R, SA, SE, SR, SP> => Effect.tap(
     make(options),
     form => Effect.forkScoped(run(form)),
 )

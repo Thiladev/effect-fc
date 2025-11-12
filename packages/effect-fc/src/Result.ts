@@ -186,7 +186,7 @@ export const makeProgressLayer = <A, E, P = never>(): Layer.Layer<
 }))
 
 
-export namespace forkEffect {
+export namespace forkEffectSubscriptionRef {
     export type InputContext<R, P> = R extends Progress<infer X> ? [X] extends [P] ? R : never : R
     export type OutputContext<R> = Scope.Scope | Exclude<R, Progress<any> | Progress<never>>
 
@@ -195,13 +195,13 @@ export namespace forkEffect {
     }
 }
 
-export const forkEffect = <A, E, R, P = never>(
-    effect: Effect.Effect<A, E, forkEffect.InputContext<R, NoInfer<P>>>,
-    options?: forkEffect.Options<P>,
+export const forkEffectSubscriptionRef = <A, E, R, P = never>(
+    effect: Effect.Effect<A, E, forkEffectSubscriptionRef.InputContext<R, NoInfer<P>>>,
+    options?: forkEffectSubscriptionRef.Options<P>,
 ): Effect.Effect<
     Subscribable.Subscribable<Result<A, E, P>>,
     never,
-    forkEffect.OutputContext<R>
+    forkEffectSubscriptionRef.OutputContext<R>
 > => Effect.tap(
     SubscriptionRef.make<Result<A, E, P>>(initial()),
     ref => Effect.forkScoped(State<A, E, P>().pipe(
@@ -220,9 +220,12 @@ export const forkEffect = <A, E, R, P = never>(
 ) as Effect.Effect<Subscribable.Subscribable<Result<A, E, P>>, never, Scope.Scope>
 
 export namespace forkEffectPubSub {
-    export type InputContext<R, P> = forkEffect.InputContext<R, P>
-    export type OutputContext<R> = forkEffect.OutputContext<R>
-    export interface Options<P> extends forkEffect.Options<P> {}
+    export type InputContext<R, P> = R extends Progress<infer X> ? [X] extends [P] ? R : never : R
+    export type OutputContext<R> = Scope.Scope | Exclude<R, Progress<any> | Progress<never>>
+
+    export interface Options<P> {
+        readonly initialProgress?: P
+    }
 }
 
 export const forkEffectPubSub = <A, E, R, P = never>(
