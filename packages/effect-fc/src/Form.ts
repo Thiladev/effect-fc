@@ -1,4 +1,4 @@
-import { Array, Cause, Chunk, type Duration, Effect, Equal, Exit, Fiber, flow, Hash, identity, Option, ParseResult, Pipeable, Predicate, Ref, Schema, type Scope, Stream } from "effect"
+import { Array, Cause, Chunk, type Duration, Effect, Equal, Exit, Fiber, flow, Hash, HashMap, identity, Option, ParseResult, Pipeable, Predicate, Ref, Schema, type Scope, Stream } from "effect"
 import type { NoSuchElementException } from "effect/Cause"
 import type * as React from "react"
 import * as Component from "./Component.js"
@@ -22,6 +22,7 @@ extends Pipeable.Pipeable {
     readonly autosubmit: boolean
     readonly debounce: Option.Option<Duration.DurationInput>
 
+    readonly fieldCacheRef: Ref.Ref<HashMap.HashMap<FormFieldKey, FormField<unknown, unknown>>>
     readonly valueRef: SubscriptionRef.SubscriptionRef<Option.Option<A>>
     readonly encodedValueRef: SubscriptionRef.SubscriptionRef<I>
     readonly errorRef: SubscriptionRef.SubscriptionRef<Option.Option<ParseResult.ParseError>>
@@ -42,6 +43,7 @@ extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR, SP> {
         readonly autosubmit: boolean,
         readonly debounce: Option.Option<Duration.DurationInput>,
 
+        readonly fieldCacheRef: Ref.Ref<HashMap.HashMap<FormFieldKey, FormField<unknown, unknown>>>,
         readonly valueRef: SubscriptionRef.SubscriptionRef<Option.Option<A>>,
         readonly encodedValueRef: SubscriptionRef.SubscriptionRef<I>,
         readonly errorRef: SubscriptionRef.SubscriptionRef<Option.Option<ParseResult.ParseError>>,
@@ -51,21 +53,6 @@ extends Pipeable.Class() implements Form<A, I, R, SA, SE, SR, SP> {
         readonly canSubmitSubscribable: Subscribable.Subscribable<boolean>,
     ) {
         super()
-    }
-}
-
-const FormFieldKeySymbol = Symbol.for("@effect-fc/Form/FormFieldKeySymbol")
-class FormFieldKey implements Equal.Equal {
-    [FormFieldKeySymbol] = FormFieldKeySymbol
-    constructor(readonly a: PropertyPath.PropertyPath) {}
-
-    [Equal.symbol](that: Equal.Equal) {
-        return Predicate.hasProperty(that, FormFieldKeySymbol)
-            ? PropertyPath.equivalence(this.a, (that as unknown as FormFieldKey).a)
-            : false
-    }
-    [Hash.symbol]() {
-        return 0
     }
 }
 
@@ -104,6 +91,7 @@ export const make = Effect.fnUntraced(function* <A, I = A, R = never, SA = void,
         options.autosubmit ?? false,
         Option.fromNullable(options.debounce),
 
+        yield* Ref.make(HashMap.empty<FormFieldKey, FormField<unknown, unknown>>()),
         valueRef,
         yield* SubscriptionRef.make(options.initialEncodedValue),
         errorRef,
@@ -269,7 +257,23 @@ extends Pipeable.Class() implements FormField<A, I> {
     }
 }
 
+const FormFieldKeyTypeId: unique symbol = Symbol.for("@effect-fc/Form/FormFieldKey")
+type FormFieldKeyTypeId = typeof FormFieldKeyTypeId
+
+class FormFieldKey implements Equal.Equal {
+    readonly [FormFieldKeyTypeId]: FormFieldKeyTypeId = FormFieldKeyTypeId
+    constructor(readonly path: PropertyPath.PropertyPath) {}
+
+    [Equal.symbol](that: Equal.Equal) {
+        return isFormFieldKey(that) && PropertyPath.equivalence(this.path, that.path)
+    }
+    [Hash.symbol]() {
+        return 0
+    }
+}
+
 export const isFormField = (u: unknown): u is FormField<unknown, unknown> => Predicate.hasProperty(u, FormFieldTypeId)
+const isFormFieldKey = (u: unknown): u is FormFieldKey => Predicate.hasProperty(u, FormFieldKeyTypeId)
 
 export const makeFormField = <A, I, R, SA, SE, SR, SP, const P extends PropertyPath.Paths<NoInfer<I>>>(
     self: Form<A, I, R, SA, SE, SR, SP>,
