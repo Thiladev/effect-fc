@@ -210,21 +210,15 @@ export const service = <A, I = A, R = never, SA = void, SE = A, SR = never, SP =
 export const field = <A, I, R, SA, SE, SR, SP, const P extends PropertyPath.Paths<NoInfer<I>>>(
     self: Form<A, I, R, SA, SE, SR, SP>,
     path: P,
-): FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>> => new FormFieldImpl(
-    Subscribable.mapEffect(self.valueRef, Option.match({
-        onSome: v => Option.map(PropertyPath.get(v, path), Option.some),
-        onNone: () => Option.some(Option.none()),
-    })),
-    SubscriptionSubRef.makeFromPath(self.encodedValueRef, path),
-    Subscribable.mapEffect(self.errorRef, Option.match({
-        onSome: flow(
-            ParseResult.ArrayFormatter.formatError,
-            Effect.map(Array.filter(issue => PropertyPath.equivalence(issue.path, path))),
+): Effect.Effect<FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>>> => self.fieldCacheRef.pipe(
+    Effect.map(HashMap.get(new FormFieldKey(path))),
+    Effect.flatMap(Option.match({
+        onSome: v => Effect.succeed(v as FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>>),
+        onNone: () => Effect.tap(
+            Effect.succeed(makeFormField(self, path)),
+            v => Ref.update(self.fieldCacheRef, HashMap.set(new FormFieldKey(path), v as FormField<unknown, unknown>)),
         ),
-        onNone: () => Effect.succeed([]),
     })),
-    Subscribable.map(self.validationFiberRef, Option.isSome),
-    Subscribable.map(self.submitResultRef, result => Result.isRunning(result) || Result.isRefreshing(result)),
 )
 
 
