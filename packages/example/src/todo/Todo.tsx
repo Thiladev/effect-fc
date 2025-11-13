@@ -72,8 +72,8 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
         return [
             indexRef,
             form,
-            Form.field(form, ["content"]),
-            Form.field(form, ["completedAt"]),
+            yield* Form.field(form, ["content"]),
+            yield* Form.field(form, ["completedAt"]),
         ] as const
     }), [props._tag, props._tag === "edit" ? props.id : undefined])
 

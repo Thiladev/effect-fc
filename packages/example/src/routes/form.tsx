@@ -86,17 +86,17 @@ class RegisterFormView extends Component.makeUntraced("RegisterFormView")(functi
             }}>
                 <Flex direction="column" gap="2">
                     <TextFieldFormInputFC
-                        field={Form.useField(form, ["email"])}
+                        field={yield* Form.field(form, ["email"])}
                     />
 
                     <TextFieldFormInputFC
-                        field={Form.useField(form, ["password"])}
+                        field={yield* Form.field(form, ["password"])}
                     />
 
                     <TextFieldFormInputFC
                         optional
                         type="datetime-local"
-                        field={Form.useField(form, ["birth"])}
+                        field={yield* Form.field(form, ["birth"])}
                         defaultValue=""
                     />
 
