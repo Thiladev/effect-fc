@@ -29,7 +29,7 @@ extends
     ): (props: P) => A
 }
 
-export namespace Component {
+export declare namespace Component {
     export type Props<T extends Component<any, any, any, any>> = [T] extends [Component<infer P, infer _A, infer _E, infer _R>] ? P : never
     export type Success<T extends Component<any, any, any, any>> = [T] extends [Component<infer _P, infer A, infer _E, infer _R>] ? A : never
     export type Error<T extends Component<any, any, any, any>> = [T] extends [Component<infer _P, infer _A, infer E, infer _R>] ? E : never
@@ -93,7 +93,7 @@ const nonReactiveTags = [Tracer.ParentSpan] as const
 
 export const isComponent = (u: unknown): u is Component<{}, React.ReactNode, unknown, unknown> => Predicate.hasProperty(u, TypeId)
 
-export namespace make {
+export declare namespace make {
     export type Gen = {
         <Eff extends Utils.YieldWrap<Effect.Effect<any, any, any>>, A extends React.ReactNode, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>
@@ -406,7 +406,7 @@ export class ScopeMap extends Effect.Service<ScopeMap>()("@effect-fc/Component/S
     effect: Effect.bind(Effect.Do, "ref", () => Ref.make(HashMap.empty<object, ScopeMap.Entry>()))
 }) {}
 
-export namespace ScopeMap {
+export declare namespace ScopeMap {
     export interface Entry {
         readonly scope: Scope.CloseableScope
         readonly closeFiber: Option.Option<Fiber.RuntimeFiber<void>>
@@ -414,19 +414,17 @@ export namespace ScopeMap {
 }
 
 
-export namespace useScope {
+export declare namespace useScope {
     export interface Options {
         readonly finalizerExecutionStrategy?: ExecutionStrategy.ExecutionStrategy
         readonly finalizerExecutionDebounce?: Duration.DurationInput
     }
 }
 
-export const useScope: {
-    (
-        deps: React.DependencyList,
-        options?: useScope.Options,
-    ): Effect.Effect<Scope.Scope>
-} = Effect.fnUntraced(function*(deps, options) {
+export const useScope = Effect.fnUntraced(function*(
+    deps: React.DependencyList,
+    options?: useScope.Options,
+): Effect.fn.Return<Scope.Scope> {
     // biome-ignore lint/style/noNonNullAssertion: context initialization
     const runtimeRef = React.useRef<Runtime.Runtime<never>>(null!)
     runtimeRef.current = yield* Effect.runtime()
@@ -478,32 +476,22 @@ export const useScope: {
     return scope
 })
 
-export const useOnMount: {
-    <A, E, R>(
-        f: () => Effect.Effect<A, E, R>
-    ): Effect.Effect<A, E, R>
-} = Effect.fnUntraced(function* <A, E, R>(
+export const useOnMount = Effect.fnUntraced(function* <A, E, R>(
     f: () => Effect.Effect<A, E, R>
-) {
+): Effect.fn.Return<A, E, R> {
     const runtime = yield* Effect.runtime<R>()
     return yield* React.useState(() => Runtime.runSync(runtime)(Effect.cached(f())))[0]
 })
 
-export namespace useOnChange {
+export declare namespace useOnChange {
     export interface Options extends useScope.Options {}
 }
 
-export const useOnChange: {
-    <A, E, R>(
-        f: () => Effect.Effect<A, E, R>,
-        deps: React.DependencyList,
-        options?: useOnChange.Options,
-    ): Effect.Effect<A, E, Exclude<R, Scope.Scope>>
-} = Effect.fnUntraced(function* <A, E, R>(
+export const useOnChange = Effect.fnUntraced(function* <A, E, R>(
     f: () => Effect.Effect<A, E, R>,
     deps: React.DependencyList,
     options?: useOnChange.Options,
-) {
+): Effect.fn.Return<A, E, Exclude<R, Scope.Scope>> {
     const runtime = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
     const scope = yield* useScope(deps, options)
 
@@ -513,24 +501,18 @@ export const useOnChange: {
     ), [scope])
 })
 
-export namespace useReactEffect {
+export declare namespace useReactEffect {
     export interface Options {
         readonly finalizerExecutionMode?: "sync" | "fork"
         readonly finalizerExecutionStrategy?: ExecutionStrategy.ExecutionStrategy
     }
 }
 
-export const useReactEffect: {
-    <E, R>(
-        f: () => Effect.Effect<void, E, R>,
-        deps?: React.DependencyList,
-        options?: useReactEffect.Options,
-    ): Effect.Effect<void, never, Exclude<R, Scope.Scope>>
-} = Effect.fnUntraced(function* <E, R>(
+export const useReactEffect = Effect.fnUntraced(function* <E, R>(
     f: () => Effect.Effect<void, E, R>,
     deps?: React.DependencyList,
     options?: useReactEffect.Options,
-) {
+): Effect.fn.Return<void, never, Exclude<R, Scope.Scope>> {
     const runtime = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
     // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
     React.useEffect(() => runReactEffect(runtime, f, options), deps)
@@ -558,21 +540,15 @@ const runReactEffect = <E, R>(
     Runtime.runSync(runtime),
 )
 
-export namespace useReactLayoutEffect {
+export declare namespace useReactLayoutEffect {
     export interface Options extends useReactEffect.Options {}
 }
 
-export const useReactLayoutEffect: {
-    <E, R>(
-        f: () => Effect.Effect<void, E, R>,
-        deps?: React.DependencyList,
-        options?: useReactLayoutEffect.Options,
-    ): Effect.Effect<void, never, Exclude<R, Scope.Scope>>
-} = Effect.fnUntraced(function* <E, R>(
+export const useReactLayoutEffect = Effect.fnUntraced(function* <E, R>(
     f: () => Effect.Effect<void, E, R>,
     deps?: React.DependencyList,
     options?: useReactLayoutEffect.Options,
-) {
+): Effect.fn.Return<void, never, Exclude<R, Scope.Scope>> {
     const runtime = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
     // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
     React.useLayoutEffect(() => runReactEffect(runtime, f, options), deps)
@@ -590,15 +566,10 @@ export const useRunPromise = <R = never>(): Effect.Effect<
     Scope.Scope | R
 > => Effect.andThen(Effect.runtime(), context => Runtime.runPromise(context))
 
-export const useCallbackSync: {
-    <Args extends unknown[], A, E, R>(
-        f: (...args: Args) => Effect.Effect<A, E, R>,
-        deps: React.DependencyList,
-    ): Effect.Effect<(...args: Args) => A, never, R>
-} = Effect.fnUntraced(function* <Args extends unknown[], A, E, R>(
+export const useCallbackSync = Effect.fnUntraced(function* <Args extends unknown[], A, E, R>(
     f: (...args: Args) => Effect.Effect<A, E, R>,
     deps: React.DependencyList,
-) {
+): Effect.fn.Return<(...args: Args) => A, never, R> {
     // biome-ignore lint/style/noNonNullAssertion: context initialization
     const runtimeRef = React.useRef<Runtime.Runtime<R>>(null!)
     runtimeRef.current = yield* Effect.runtime<R>()
@@ -607,15 +578,10 @@ export const useCallbackSync: {
     return React.useCallback((...args: Args) => Runtime.runSync(runtimeRef.current)(f(...args)), deps)
 })
 
-export const useCallbackPromise: {
-    <Args extends unknown[], A, E, R>(
-        f: (...args: Args) => Effect.Effect<A, E, R>,
-        deps: React.DependencyList,
-    ): Effect.Effect<(...args: Args) => Promise<A>, never, R>
-} = Effect.fnUntraced(function* <Args extends unknown[], A, E, R>(
+export const useCallbackPromise = Effect.fnUntraced(function* <Args extends unknown[], A, E, R>(
     f: (...args: Args) => Effect.Effect<A, E, R>,
     deps: React.DependencyList,
-) {
+): Effect.fn.Return<(...args: Args) => Promise<A>, never, R> {
     // biome-ignore lint/style/noNonNullAssertion: context initialization
     const runtimeRef = React.useRef<Runtime.Runtime<R>>(null!)
     runtimeRef.current = yield* Effect.runtime<R>()
@@ -624,7 +590,7 @@ export const useCallbackPromise: {
     return React.useCallback((...args: Args) => Runtime.runPromise(runtimeRef.current)(f(...args)), deps)
 })
 
-export namespace useContext {
+export declare namespace useContext {
     export interface Options extends useOnChange.Options {}
 }
 
