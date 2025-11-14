@@ -30,11 +30,9 @@ export const useStream: {
     return reactStateValue as Option.Some<A>
 })
 
-export const useStreamFromReactiveValues: {
-    <const A extends React.DependencyList>(
-        values: A
-    ): Effect.Effect<Stream.Stream<A>, never, Scope.Scope>
-} = Effect.fnUntraced(function* <const A extends React.DependencyList>(values: A) {
+export const useStreamFromReactiveValues = Effect.fnUntraced(function* <const A extends React.DependencyList>(
+    values: A
+): Effect.fn.Return<Stream.Stream<A>, never, Scope.Scope> {
     const { latest, pubsub, stream } = yield* Component.useOnMount(() => Effect.Do.pipe(
         Effect.bind("latest", () => Ref.make(values)),
         Effect.bind("pubsub", () => Effect.acquireRelease(PubSub.unbounded<A>(), PubSub.shutdown)),
