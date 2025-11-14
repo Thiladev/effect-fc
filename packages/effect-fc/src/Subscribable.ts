@@ -1,4 +1,4 @@
-import { Effect, Equivalence, type Scope, Stream, Subscribable } from "effect"
+import { Effect, Equivalence, Stream, Subscribable } from "effect"
 import * as React from "react"
 import * as Component from "./Component.js"
 
@@ -16,7 +16,7 @@ export const zipLatestAll = <const T extends readonly Subscribable.Subscribable<
     changes: Stream.zipLatestAll(...elements.map(v => v.changes)),
 }) as any
 
-export namespace useSubscribables {
+export declare namespace useSubscribables {
     export type Success<T extends readonly Subscribable.Subscribable<any, any, any>[]> = [T[number]] extends [never]
         ? never
         : { [K in keyof T]: T[K] extends Subscribable.Subscribable<infer A, infer _E, infer _R> ? A : never }
@@ -26,19 +26,14 @@ export namespace useSubscribables {
     }
 }
 
-export const useSubscribables: {
-    <const T extends readonly Subscribable.Subscribable<any, any, any>[]>(
-        elements: T,
-        options?: useSubscribables.Options<useSubscribables.Success<NoInfer<T>>>,
-    ): Effect.Effect<
-        useSubscribables.Success<T>,
-        [T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer E, infer _R> ? E : never,
-        Scope.Scope | ([T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer _E, infer R> ? R : never)
-    >
-} = Effect.fnUntraced(function* <const T extends readonly Subscribable.Subscribable<any, any, any>[]>(
+export const useSubscribables = Effect.fnUntraced(function* <const T extends readonly Subscribable.Subscribable<any, any, any>[]>(
     elements: T,
     options?: useSubscribables.Options<useSubscribables.Success<NoInfer<T>>>,
-) {
+): Effect.fn.Return<
+    useSubscribables.Success<T>,
+    [T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer E, infer _R> ? E : never,
+    [T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer _E, infer R> ? R : never
+> {
     const [reactStateValue, setReactStateValue] = React.useState(
         yield* Component.useOnMount(() => Effect.all(elements.map(v => v.get)))
     )
