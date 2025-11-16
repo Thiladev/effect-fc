@@ -33,10 +33,12 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
     }
 
     query(key: K) {
-        return this.result.pipe(
+        return this.fiber.pipe(
             Effect.andThen(Option.match({
-
-            }))
+                onSome: Fiber.interrupt,
+                onNone: () => Effect.void,
+            })),
+            Effect.andThen(),
         )
     }
 }
