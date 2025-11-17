@@ -187,7 +187,7 @@ export const makeProgressLayer = <A, E, P = never>(): Layer.Layer<
 
 
 export namespace unsafeForkEffect {
-    export type OutputContext<A, E, R, P> = Scope.Scope | Exclude<R, State<A, E, P> | Progress<P>>
+    export type OutputContext<A, E, R, P> = Scope.Scope | Exclude<R, State<A, E, P> | Progress<P> | Progress<never>>
 
     export interface Options<P> {
         readonly initialProgress?: P
@@ -230,7 +230,11 @@ export const unsafeForkEffect = <A, E, R, P = never>(
         }),
         fiber,
     ]),
-)
+) as Effect.Effect<
+    readonly [result: Subscribable.Subscribable<Result<A, E, P>, never, never>, fiber: Fiber.Fiber<A, E>],
+    never,
+    Scope.Scope | unsafeForkEffect.OutputContext<A, E, R, P>
+>
 
 export namespace forkEffect {
     export type InputContext<R, P> = R extends Progress<infer X> ? [X] extends [P] ? R : never : R
