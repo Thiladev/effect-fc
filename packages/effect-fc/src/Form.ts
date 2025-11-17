@@ -160,8 +160,8 @@ export const submit = <A, I, R, SA, SE, SR, SP>(
 > => Effect.whenEffect(
     self.valueRef.pipe(
         Effect.andThen(identity),
-        Effect.andThen(value => Result.forkEffect(
-            self.onSubmit(value) as Effect.Effect<SA, SE, Result.forkEffect.InputContext<SR, SP>>,
+        Effect.andThen(value => Result.unsafeForkEffect(
+            self.onSubmit(value),
             { initialProgress: self.initialSubmitProgress },
         )),
         Effect.andThen(([sub]) => Effect.all([Effect.succeed(sub), sub.get])),

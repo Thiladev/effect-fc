@@ -186,22 +186,21 @@ export const makeProgressLayer = <A, E, P = never>(): Layer.Layer<
 }))
 
 
-export namespace forkEffect {
-    export type InputContext<R, P> = R extends Progress<infer X> ? [X] extends [P] ? R : never : R
-    export type OutputContext<R> = Scope.Scope | Exclude<R, Progress<any> | Progress<never>>
+export namespace unsafeForkEffect {
+    export type OutputContext<A, E, R, P> = Scope.Scope | Exclude<R, State<A, E, P> | Progress<P>>
 
     export interface Options<P> {
         readonly initialProgress?: P
     }
 }
 
-export const forkEffect = <A, E, R, P = never>(
-    effect: Effect.Effect<A, E, forkEffect.InputContext<R, NoInfer<P>>>,
-    options?: forkEffect.Options<P>,
+export const unsafeForkEffect = <A, E, R, P = never>(
+    effect: Effect.Effect<A, E, R>,
+    options?: unsafeForkEffect.Options<P>,
 ): Effect.Effect<
     readonly [result: Subscribable.Subscribable<Result<A, E, P>, never, never>, fiber: Fiber.Fiber<A, E>],
     never,
-    Scope.Scope | forkEffect.OutputContext<R>
+    Scope.Scope | unsafeForkEffect.OutputContext<A, E, R, P>
 > => Effect.Do.pipe(
     Effect.bind("ref", () => Ref.make<Result<A, E, P>>(initial())),
     Effect.bind("pubsub", () => PubSub.unbounded<Result<A, E, P>>()),
@@ -231,8 +230,21 @@ export const forkEffect = <A, E, R, P = never>(
         }),
         fiber,
     ]),
-) as Effect.Effect<
-    readonly [result: Subscribable.Subscribable<Result<A, E, P>, never, never>, fiber: Fiber.Fiber<A, E>],
-    never,
-    Scope.Scope | forkEffect.OutputContext<R>
->
+)
+
+export namespace forkEffect {
+    export type InputContext<R, P> = R extends Progress<infer X> ? [X] extends [P] ? R : never : R
+    export type OutputContext<A, E, R, P> = unsafeForkEffect.OutputContext<A, E, R, P>
+    export interface Options<P> extends unsafeForkEffect.Options<P> {}
+}
+
+export const forkEffect: {
+    <A, E, R, P = never>(
+        effect: Effect.Effect<A, E, forkEffect.InputContext<R, NoInfer<P>>>,
+        options?: forkEffect.Options<P>,
+    ): Effect.Effect<
+        readonly [result: Subscribable.Subscribable<Result<A, E, P>, never, never>, fiber: Fiber.Fiber<A, E>],
+        never,
+        Scope.Scope | forkEffect.OutputContext<A, E, R, P>
+    >
+} = unsafeForkEffect
