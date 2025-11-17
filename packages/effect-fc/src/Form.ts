@@ -164,9 +164,10 @@ export const submit = <A, I, R, SA, SE, SR, SP>(
             self.onSubmit(value) as Effect.Effect<SA, SE, Result.forkEffect.InputContext<SR, SP>>,
             { initialProgress: self.initialSubmitProgress },
         )),
-        Effect.andThen(([result]) => Stream.runFoldEffect(
-            result.changes,
-            Result.initial() as Result.Result<SA, SE, SP>,
+        Effect.andThen(([sub]) => Effect.all([Effect.succeed(sub), sub.get])),
+        Effect.andThen(([sub, initial]) => Stream.runFoldEffect(
+            sub.changes,
+            initial,
             (_, result) => Effect.as(Ref.set(self.submitResultRef, result), result),
         )),
         Effect.tap(result => Result.isFailure(result)
