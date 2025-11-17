@@ -1,5 +1,5 @@
 import { Effect, Fiber, Option, Pipeable, Predicate, Stream, type Subscribable, type SubscriptionRef } from "effect"
-import type * as Result from "./Result.js"
+import * as Result from "./Result.js"
 
 
 export const QueryTypeId: unique symbol = Symbol.for("@effect-fc/Query/Query")
@@ -38,7 +38,8 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
                 onSome: Fiber.interrupt,
                 onNone: () => Effect.void,
             })),
-            Effect.andThen(),
+            Effect.andThen(Result.forkEffect(this.f(key))),
+            Effect.tap(([result, fiber]) => ),
         )
     }
 }

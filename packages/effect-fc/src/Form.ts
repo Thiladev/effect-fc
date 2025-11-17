@@ -65,7 +65,7 @@ export namespace make {
         readonly onSubmit: (
             this: Form<NoInfer<A>, NoInfer<I>, NoInfer<R>, unknown, unknown, unknown>,
             value: NoInfer<A>,
-        ) => Effect.Effect<SA, SE, Result.forkEffectPubSub.InputContext<SR, NoInfer<SP>>>
+        ) => Effect.Effect<SA, SE, Result.forkEffect.InputContext<SR, NoInfer<SP>>>
         readonly initialSubmitProgress?: SP
         readonly autosubmit?: boolean
         readonly debounce?: Duration.DurationInput
@@ -160,17 +160,15 @@ export const submit = <A, I, R, SA, SE, SR, SP>(
 > => Effect.whenEffect(
     self.valueRef.pipe(
         Effect.andThen(identity),
-        Effect.andThen(value => Result.forkEffectPubSub(
-            self.onSubmit(value) as Effect.Effect<SA, SE, Result.forkEffectPubSub.InputContext<SR, SP>>,
+        Effect.andThen(value => Result.forkEffect(
+            self.onSubmit(value) as Effect.Effect<SA, SE, Result.forkEffect.InputContext<SR, SP>>,
             { initialProgress: self.initialSubmitProgress },
         )),
-        Effect.andThen(identity),
-        Effect.andThen(Stream.fromQueue),
-        Stream.unwrapScoped,
-        Stream.runFoldEffect(
+        Effect.andThen(([result]) => Stream.runFoldEffect(
+            result.changes,
             Result.initial() as Result.Result<SA, SE, SP>,
             (_, result) => Effect.as(Ref.set(self.submitResultRef, result), result),
-        ),
+        )),
         Effect.tap(result => Result.isFailure(result)
             ? Option.match(
                 Chunk.findFirst(
