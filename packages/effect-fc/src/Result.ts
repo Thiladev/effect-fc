@@ -102,7 +102,10 @@ export const isSuccess = (u: unknown): u is Success<unknown> => isResult(u) && u
 export const isFailure = (u: unknown): u is Failure<unknown, unknown> => isResult(u) && u._tag === "Failure"
 export const isRefreshing = (u: unknown): u is Refreshing<unknown> => isResult(u) && Predicate.hasProperty(u, "refreshing") && u.refreshing
 
-export const initial = (): Initial => Object.setPrototypeOf({ _tag: "Initial" }, ResultPrototype)
+export const initial: {
+    (): Initial
+    <A, E = never, P = never>(): Result<A, E, P>
+} = (): Initial => Object.setPrototypeOf({ _tag: "Initial" }, ResultPrototype)
 export const running = <P = never>(progress?: P): Running<P> => Object.setPrototypeOf({ _tag: "Running", progress }, ResultPrototype)
 export const succeed = <A>(value: A): Success<A> => Object.setPrototypeOf({ _tag: "Success", value }, ResultPrototype)
 
@@ -187,7 +190,7 @@ export const makeProgressLayer = <A, E, P = never>(): Layer.Layer<
 
 
 export namespace unsafeForkEffect {
-    export type OutputContext<A, E, R, P> = Scope.Scope | Exclude<R, State<A, E, P> | Progress<P> | Progress<never>>
+    export type OutputContext<A, E, R, P> = Exclude<R, State<A, E, P> | Progress<P> | Progress<never>>
 
     export interface Options<P> {
         readonly initialProgress?: P
@@ -202,7 +205,7 @@ export const unsafeForkEffect = <A, E, R, P = never>(
     never,
     Scope.Scope | unsafeForkEffect.OutputContext<A, E, R, P>
 > => Effect.Do.pipe(
-    Effect.bind("ref", () => Ref.make<Result<A, E, P>>(initial())),
+    Effect.bind("ref", () => Ref.make(initial<A, E, P>())),
     Effect.bind("pubsub", () => PubSub.unbounded<Result<A, E, P>>()),
     Effect.bind("fiber", ({ ref, pubsub }) => Effect.forkScoped(State<A, E, P>().pipe(
         Effect.andThen(state => state.set(running(options?.initialProgress)).pipe(
