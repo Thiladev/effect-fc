@@ -33,19 +33,17 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
     }
 
     readonly interrupt: Effect.Effect<void, never, never> = Effect.gen(this, function*() {
-        return yield* Effect.andThen(this.fiber, Option.match({
-            onSome: fiber => Effect.andThen(
-                Fiber.interrupt(fiber),
-                SubscriptionRef.set(this.fiber, Option.none()),
-            ),
+        return Option.match(yield* this.fiber, {
+            onSome: Fiber.interrupt,
             onNone: () => Effect.void,
-        }))
+        })
     })
 
     query(key: K): Effect.Effect<Result.Result<A, E, P>, never, Scope.Scope | R> {
-        return this.fiber.pipe(
-            Effect.andThen(this.interrupt),
-            Effect.andThen(Result.unsafeForkEffect(this.f(key), { initialProgress: this.initialProgress })),
+        return Result.unsafeForkEffect(
+            Effect.onExit(this.f(key), () => SubscriptionRef.set(this.fiber, Option.none())),
+            { initialProgress: this.initialProgress },
+        ).pipe(
             Effect.tap(([, fiber]) => SubscriptionRef.set(this.fiber, Option.some(fiber))),
             Effect.andThen(([sub]) => Effect.all([Effect.succeed(sub), sub.get])),
             Effect.andThen(([sub, initial]) => Stream.runFoldEffect(
@@ -53,7 +51,6 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
                 initial,
                 (_, result) => Effect.as(SubscriptionRef.set(this.result, result), result),
             )),
-            Effect.tap(SubscriptionRef.set(this.fiber, Option.none())),
         )
     }
 }
