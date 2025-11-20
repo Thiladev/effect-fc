@@ -1,8 +1,8 @@
 import { HttpClient, type HttpClientError } from "@effect/platform"
-import { Container, Heading, Text } from "@radix-ui/themes"
+import { Container, Heading, Slider, Text } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
-import { Cause, Chunk, Console, Effect, flow, Match, Option, Schema, Stream } from "effect"
-import { Component, ErrorObserver, Result, Subscribable } from "effect-fc"
+import { Array, Cause, Chunk, Console, Effect, flow, Match, Option, Schema, Stream } from "effect"
+import { Component, ErrorObserver, Query, Subscribable, SubscriptionRef } from "effect-fc"
 import { runtime } from "@/runtime"
 
 
@@ -14,14 +14,25 @@ const Post = Schema.Struct({
 })
 
 const ResultView = Component.makeUntraced("Result")(function*() {
-    const [resultSubscribable] = yield* Component.useOnMount(() => HttpClient.HttpClient.pipe(
-        Effect.andThen(client => client.get("https://jsonplaceholder.typicode.com/posts/1")),
-        Effect.andThen(response => response.json),
-        Effect.andThen(Schema.decodeUnknown(Post)),
-        Effect.tap(Effect.sleep("250 millis")),
-        Result.forkEffect,
-    ))
-    const [result] = yield* Subscribable.useSubscribables([resultSubscribable])
+    const [idRef, query] = yield* Component.useOnMount(() => Effect.gen(function*() {
+        const idRef = yield* SubscriptionRef.make(1)
+        const key = Stream.zipLatest(Stream.make("posts" as const), idRef.changes)
+
+        const query = yield* Query.service({
+            key,
+            f: ([, id]) => HttpClient.HttpClient.pipe(
+                Effect.tap(Effect.sleep("250 millis")),
+                Effect.andThen(client => client.get(`https://jsonplaceholder.typicode.com/posts/${ id }`)),
+                Effect.andThen(response => response.json),
+                Effect.andThen(Schema.decodeUnknown(Post)),
+            ),
+        })
+
+        return [idRef, query] as const
+    }))
+
+    const [id, setId] = yield* SubscriptionRef.useSubscriptionRefState(idRef)
+    const [result] = yield* Subscribable.useSubscribables([query.result])
 
     yield* Component.useOnMount(() => ErrorObserver.ErrorObserver<HttpClientError.HttpClientError>().pipe(
         Effect.andThen(observer => observer.subscribe),
@@ -40,6 +51,11 @@ const ResultView = Component.makeUntraced("Result")(function*() {
 
     return (
         <Container>
+            <Slider
+                value={[id]}
+                onValueChange={flow(Array.head, Option.getOrThrow, setId)}
+            />
+
             {Match.value(result).pipe(
                 Match.tag("Running", () => <Text>Loading...</Text>),
                 Match.tag("Success", result => <>
@@ -55,6 +71,6 @@ const ResultView = Component.makeUntraced("Result")(function*() {
     )
 })
 
-export const Route = createFileRoute("/result")({
+export const Route = createFileRoute("/query")({
     component: Component.withRuntime(ResultView, runtime.context)
 })
