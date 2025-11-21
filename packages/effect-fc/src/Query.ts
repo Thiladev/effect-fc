@@ -1,4 +1,4 @@
-import { Console, Effect, Fiber, Option, Pipeable, Predicate, type Scope, Stream, type Subscribable, SubscriptionRef } from "effect"
+import { Effect, Fiber, Option, Pipeable, Predicate, type Scope, Stream, type Subscribable, SubscriptionRef } from "effect"
 import * as Result from "./Result.js"
 
 
@@ -34,17 +34,12 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
         super()
     }
 
-    readonly interrupt: Effect.Effect<void, never, never> = Effect.gen(this, function*() {
-        yield* Console.log("interrupt called")
-        return Option.match(yield* this.fiber, {
-            onSome: fiber => Effect.gen(function*() {
-                yield* Console.log("interrupting...")
-                yield* Fiber.interrupt(fiber)
-                yield* Console.log("done interrupting.")
-            }),
+    get interrupt(): Effect.Effect<void, never, never> {
+        return Effect.andThen(this.fiber, Option.match({
+            onSome: Fiber.interrupt,
             onNone: () => Effect.void,
-        })
-    })
+        }))
+    }
 
     start(key: K): Effect.Effect<
         Subscribable.Subscribable<Result.Result<A, E, P>>,
@@ -52,9 +47,7 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
         Scope.Scope | R
     > {
         return Result.unsafeForkEffect(
-            Effect.onExit(this.f(key), exit => SubscriptionRef.set(this.fiber, Option.none()).pipe(
-                Effect.andThen(Console.log("exited", exit))
-            )),
+            Effect.onExit(this.f(key), () => SubscriptionRef.set(this.fiber, Option.none())),
             { initialProgress: this.initialProgress },
         ).pipe(
             Effect.tap(([, fiber]) => SubscriptionRef.set(this.fiber, Option.some(fiber))),
