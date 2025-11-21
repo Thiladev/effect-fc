@@ -21,7 +21,7 @@ const ResultView = Component.makeUntraced("Result")(function*() {
         const query = yield* Query.service({
             key,
             f: ([, id]) => HttpClient.HttpClient.pipe(
-                Effect.tap(Effect.sleep("250 millis")),
+                Effect.tap(Effect.sleep("500 millis")),
                 Effect.andThen(client => client.get(`https://jsonplaceholder.typicode.com/posts/${ id }`)),
                 Effect.andThen(response => response.json),
                 Effect.andThen(Schema.decodeUnknown(Post)),

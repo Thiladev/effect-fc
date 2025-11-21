@@ -1,4 +1,4 @@
-import { Effect, Fiber, Option, Pipeable, Predicate, type Scope, Stream, type Subscribable, SubscriptionRef } from "effect"
+import { Console, Effect, Fiber, Option, Pipeable, Predicate, type Scope, Stream, type Subscribable, SubscriptionRef } from "effect"
 import * as Result from "./Result.js"
 
 
@@ -13,6 +13,7 @@ extends Pipeable.Pipeable {
     readonly f: (key: K) => Effect.Effect<A, E, R>
     readonly initialProgress: P
 
+    readonly latestKey: Subscribable.Subscribable<Option.Option<K>>
     readonly fiber: Subscribable.Subscribable<Option.Option<Fiber.Fiber<A, E>>>
     readonly result: Subscribable.Subscribable<Result.Result<A, E, P>>
 }
@@ -26,6 +27,7 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
         readonly f: (key: K) => Effect.Effect<A, E, R>,
         readonly initialProgress: P,
 
+        readonly latestKey: SubscriptionRef.SubscriptionRef<Option.Option<K>>,
         readonly fiber: SubscriptionRef.SubscriptionRef<Option.Option<Fiber.Fiber<A, E>>>,
         readonly result: SubscriptionRef.SubscriptionRef<Result.Result<A, E, P>>,
     ) {
@@ -33,24 +35,43 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
     }
 
     readonly interrupt: Effect.Effect<void, never, never> = Effect.gen(this, function*() {
+        yield* Console.log("interrupt called")
         return Option.match(yield* this.fiber, {
-            onSome: Fiber.interrupt,
+            onSome: fiber => Effect.gen(function*() {
+                yield* Console.log("interrupting...")
+                yield* Fiber.interrupt(fiber)
+                yield* Console.log("done interrupting.")
+            }),
             onNone: () => Effect.void,
         })
     })
 
-    query(key: K): Effect.Effect<Result.Result<A, E, P>, never, Scope.Scope | R> {
+    start(key: K): Effect.Effect<
+        Subscribable.Subscribable<Result.Result<A, E, P>>,
+        never,
+        Scope.Scope | R
+    > {
         return Result.unsafeForkEffect(
-            Effect.onExit(this.f(key), () => SubscriptionRef.set(this.fiber, Option.none())),
+            Effect.onExit(this.f(key), exit => SubscriptionRef.set(this.fiber, Option.none()).pipe(
+                Effect.andThen(Console.log("exited", exit))
+            )),
             { initialProgress: this.initialProgress },
         ).pipe(
             Effect.tap(([, fiber]) => SubscriptionRef.set(this.fiber, Option.some(fiber))),
-            Effect.andThen(([sub]) => Effect.all([Effect.succeed(sub), sub.get])),
-            Effect.andThen(([sub, initial]) => Stream.runFoldEffect(
+            Effect.map(([sub]) => sub),
+        )
+    }
+
+    watch(
+        sub: Subscribable.Subscribable<Result.Result<A, E, P>>
+    ): Effect.Effect<Result.Result<A, E, P>> {
+        return Effect.andThen(
+            sub.get,
+            initial => Stream.runFoldEffect(
                 sub.changes,
                 initial,
                 (_, result) => Effect.as(SubscriptionRef.set(this.result, result), result),
-            )),
+            ),
         )
     }
 }
@@ -73,6 +94,7 @@ export const make = Effect.fnUntraced(function* <K extends readonly any[], A, E 
         options.f as any,
         options.initialProgress as P,
 
+        yield* SubscriptionRef.make(Option.none<K>()),
         yield* SubscriptionRef.make(Option.none<Fiber.Fiber<A, E>>()),
         yield* SubscriptionRef.make(Result.initial<A, E, P>()),
     )
@@ -91,7 +113,12 @@ export const service = <K extends readonly any[], A, E = never, R = never, P = n
 
 export const run = <K extends readonly any[], A, E, R, P>(
     self: Query<K, A, E, R, P>
-): Effect.Effect<void, never, Scope.Scope | R> => Stream.runForEach(self.key, key => Effect.andThen(
-    (self as QueryImpl<K, A, E, R, P>).interrupt,
-    Effect.forkScoped((self as QueryImpl<K, A, E, R, P>).query(key)),
-))
+): Effect.Effect<void, never, Scope.Scope | R> => Stream.runForEach(self.key, key =>
+    (self as QueryImpl<K, A, E, R, P>).interrupt.pipe(
+        Effect.andThen(SubscriptionRef.set((self as QueryImpl<K, A, E, R, P>).latestKey, Option.some(key))),
+        Effect.andThen((self as QueryImpl<K, A, E, R, P>).start(key)),
+        Effect.andThen(sub => Effect.forkScoped(
+            (self as QueryImpl<K, A, E, R, P>).watch(sub)
+        )),
+    )
+)
