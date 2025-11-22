@@ -106,12 +106,11 @@ export const service = <K extends readonly any[], A, E = never, R = never, P = n
 
 export const run = <K extends readonly any[], A, E, R, P>(
     self: Query<K, A, E, R, P>
-): Effect.Effect<void, never, Scope.Scope | R> => Stream.runForEach(self.key, key =>
-    (self as QueryImpl<K, A, E, R, P>).interrupt.pipe(
-        Effect.andThen(SubscriptionRef.set((self as QueryImpl<K, A, E, R, P>).latestKey, Option.some(key))),
-        Effect.andThen((self as QueryImpl<K, A, E, R, P>).start(key)),
-        Effect.andThen(sub => Effect.forkScoped(
-            (self as QueryImpl<K, A, E, R, P>).watch(sub)
-        )),
-    )
-)
+): Effect.Effect<void, never, Scope.Scope | R> => {
+    const _self = self as QueryImpl<K, A, E, R, P>
+    return Stream.runForEach(_self.key, key => _self.interrupt.pipe(
+        Effect.andThen(SubscriptionRef.set(_self.latestKey, Option.some(key))),
+        Effect.andThen(_self.start(key)),
+        Effect.andThen(sub => Effect.forkScoped(_self.watch(sub))),
+    ))
+}
