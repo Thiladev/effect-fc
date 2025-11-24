@@ -111,7 +111,7 @@ export const succeed = <A>(value: A): Success<A> => Object.setPrototypeOf({ _tag
 
 export const fail = <E, A = never>(
     cause: Cause.Cause<E>,
-    previousSuccess?: Success<A>,
+    previousSuccess?: Success<NoInfer<A>>,
 ): Failure<A, E> => Object.setPrototypeOf({
     _tag: "Failure",
     cause,
@@ -126,10 +126,11 @@ export const refreshing = <R extends Success<any> | Failure<any, any>, P = never
 )
 
 export const fromExit = <A, E>(
-    exit: Exit.Exit<A, E>
+    exit: Exit.Exit<A, E>,
+    previousSuccess?: Success<NoInfer<A>>,
 ): Success<A> | Failure<A, E> => exit._tag === "Success"
     ? succeed(exit.value)
-    : fail(exit.cause)
+    : fail(exit.cause, previousSuccess)
 
 export const toExit = <A, E, P>(
     self: Result<A, E, P>
@@ -192,14 +193,23 @@ export const makeProgressLayer = <A, E, P = never>(): Layer.Layer<
 export namespace unsafeForkEffect {
     export type OutputContext<A, E, R, P> = Exclude<R, State<A, E, P> | Progress<P> | Progress<never>>
 
-    export interface Options<P> {
+    export type Options<A, E, P> = {
         readonly initialProgress?: P
-    }
+        readonly previous?: Success<A> | Failure<A, E>
+    } & (
+        | {
+            readonly refreshing: true
+            readonly previous: Success<A> | Failure<A, E>
+        }
+        | {
+            readonly refreshing?: false
+        }
+    )
 }
 
 export const unsafeForkEffect = <A, E, R, P = never>(
     effect: Effect.Effect<A, E, R>,
-    options?: unsafeForkEffect.Options<P>,
+    options?: unsafeForkEffect.Options<NoInfer<A>, NoInfer<E>, P>,
 ): Effect.Effect<
     readonly [result: Subscribable.Subscribable<Result<A, E, P>, never, never>, fiber: Fiber.Fiber<A, E>],
     never,
@@ -208,10 +218,13 @@ export const unsafeForkEffect = <A, E, R, P = never>(
     Effect.bind("ref", () => Ref.make(initial<A, E, P>())),
     Effect.bind("pubsub", () => PubSub.unbounded<Result<A, E, P>>()),
     Effect.bind("fiber", ({ ref, pubsub }) => Effect.forkScoped(State<A, E, P>().pipe(
-        Effect.andThen(state => state.set(running(options?.initialProgress)).pipe(
+        Effect.andThen(state => state.set(options?.refreshing
+            ? refreshing(options.previous, options?.initialProgress) as Result<A, E, P>
+            : running(options?.initialProgress)
+        ).pipe(
             Effect.andThen(effect),
             Effect.onExit(exit => Effect.andThen(
-                state.set(fromExit(exit)),
+                state.set(fromExit(exit, (options?.previous && isSuccess(options.previous)) ? options.previous : undefined)),
                 Effect.forkScoped(PubSub.shutdown(pubsub)),
             )),
         )),
@@ -242,13 +255,13 @@ export const unsafeForkEffect = <A, E, R, P = never>(
 export namespace forkEffect {
     export type InputContext<R, P> = R extends Progress<infer X> ? [X] extends [P] ? R : never : R
     export type OutputContext<A, E, R, P> = unsafeForkEffect.OutputContext<A, E, R, P>
-    export interface Options<P> extends unsafeForkEffect.Options<P> {}
+    export type Options<A, E, P> = unsafeForkEffect.Options<A, E, P>
 }
 
 export const forkEffect: {
     <A, E, R, P = never>(
         effect: Effect.Effect<A, E, forkEffect.InputContext<R, NoInfer<P>>>,
-        options?: forkEffect.Options<P>,
+        options?: forkEffect.Options<NoInfer<A>, NoInfer<E>, P>,
     ): Effect.Effect<
         readonly [result: Subscribable.Subscribable<Result<A, E, P>, never, never>, fiber: Fiber.Fiber<A, E>],
         never,

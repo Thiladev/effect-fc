@@ -41,7 +41,9 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
         }))
     }
 
-    start(key: K): Effect.Effect<
+    start(
+        key: K
+    ): Effect.Effect<
         Subscribable.Subscribable<Result.Result<A, E, P>>,
         never,
         Scope.Scope | R
@@ -61,7 +63,7 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
         return Effect.andThen(
             sub.get,
             initial => Stream.runFoldEffect(
-                sub.changes,
+                Stream.filter(sub.changes, Predicate.not(Result.isInitial)),
                 initial,
                 (_, result) => Effect.as(SubscriptionRef.set(this.result, result), result),
             ),
