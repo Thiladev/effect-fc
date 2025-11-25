@@ -17,9 +17,9 @@ extends Pipeable.Pipeable {
     readonly fiber: Subscribable.Subscribable<Option.Option<Fiber.Fiber<A, E>>>
     readonly result: Subscribable.Subscribable<Result.Result<A, E, P>>
 
-    fetch(key: K): Effect.Effect<Subscribable.Subscribable<Result.Result<A, E, P>>>
-    readonly refetch: Effect.Effect<Subscribable.Subscribable<Result.Result<A, E, P>>, Cause.NoSuchElementException>
-    readonly refresh: Effect.Effect<Subscribable.Subscribable<Result.Result<A, E, P>>, Cause.NoSuchElementException>
+    fetch(key: K): Effect.Effect<Result.Result<A, E, P>>
+    readonly refetch: Effect.Effect<Result.Result<A, E, P>, Cause.NoSuchElementException>
+    readonly refresh: Effect.Effect<Result.Result<A, E, P>, Cause.NoSuchElementException>
 }
 
 class QueryImpl<in out K extends readonly any[], in out A, in out E = never, in out R = never, in out P = never>
@@ -41,12 +41,35 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
     }
 
     get interrupt(): Effect.Effect<void, never, never> {
-        return this.fiber.pipe(
-            Effect.andThen(Option.match({
-                onSome: Fiber.interrupt,
-                onNone: () => Effect.void,
-            })),
-            Effect.andThen(Effect.sleep("0 millis")),
+        return Effect.andThen(this.fiber, Option.match({
+            onSome: Fiber.interrupt,
+            onNone: () => Effect.void,
+        }))
+    }
+
+    fetch(key: K): Effect.Effect<Result.Result<A, E, P>> {
+        return this.interrupt.pipe(
+            Effect.andThen(SubscriptionRef.set(this.latestKey, Option.some(key))),
+            Effect.andThen(Effect.provide(this.start(key), this.context)),
+            Effect.andThen(sub => this.watch(sub)),
+        )
+    }
+
+    get refetch(): Effect.Effect<Result.Result<A, E, P>, Cause.NoSuchElementException> {
+        return this.interrupt.pipe(
+            Effect.andThen(this.latestKey),
+            Effect.andThen(identity),
+            Effect.andThen(key => Effect.provide(this.start(key), this.context)),
+            Effect.andThen(sub => this.watch(sub)),
+        )
+    }
+
+    get refresh(): Effect.Effect<Result.Result<A, E, P>, Cause.NoSuchElementException> {
+        return this.interrupt.pipe(
+            Effect.andThen(this.latestKey),
+            Effect.andThen(identity),
+            Effect.andThen(key => Effect.provide(this.start(key, true), this.context)),
+            Effect.andThen(sub => this.watch(sub)),
         )
     }
 
@@ -86,32 +109,6 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
                 initial,
                 (_, result) => Effect.as(SubscriptionRef.set(this.result, result), result),
             ),
-        )
-    }
-
-    fetch(key: K): Effect.Effect<Subscribable.Subscribable<Result.Result<A, E, P>>> {
-        return this.interrupt.pipe(
-            Effect.andThen(SubscriptionRef.set(this.latestKey, Option.some(key))),
-            Effect.andThen(this.start(key)),
-            Effect.provide(this.context),
-        )
-    }
-
-    get refetch(): Effect.Effect<Subscribable.Subscribable<Result.Result<A, E, P>>, Cause.NoSuchElementException> {
-        return this.interrupt.pipe(
-            Effect.andThen(this.latestKey),
-            Effect.andThen(identity),
-            Effect.andThen(key => this.start(key)),
-            Effect.provide(this.context),
-        )
-    }
-
-    get refresh(): Effect.Effect<Subscribable.Subscribable<Result.Result<A, E, P>>, Cause.NoSuchElementException> {
-        return this.interrupt.pipe(
-            Effect.andThen(this.latestKey),
-            Effect.andThen(identity),
-            Effect.andThen(key => this.start(key, true)),
-            Effect.provide(this.context),
         )
     }
 }
