@@ -121,7 +121,7 @@ export const refreshing = <R extends Success<any> | Failure<any, any>, P = never
     result: R,
     progress?: P,
 ): Omit<R, keyof Refreshing<Result.Progress<R>>> & Refreshing<P> => Object.setPrototypeOf(
-    Object.assign({}, result, { progress }),
+    Object.assign({}, result, { refreshing: true, progress }),
     Object.getPrototypeOf(result),
 )
 
