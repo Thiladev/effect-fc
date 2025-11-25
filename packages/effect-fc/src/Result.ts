@@ -198,11 +198,11 @@ export namespace unsafeForkEffect {
         readonly previous?: Success<A> | Failure<A, E>
     } & (
         | {
-            readonly refreshing: true
+            readonly refresh: true
             readonly previous: Success<A> | Failure<A, E>
         }
         | {
-            readonly refreshing?: false
+            readonly refresh?: false
         }
     )
 }
@@ -218,7 +218,7 @@ export const unsafeForkEffect = <A, E, R, P = never>(
     Effect.bind("ref", () => Ref.make(initial<A, E, P>())),
     Effect.bind("pubsub", () => PubSub.unbounded<Result<A, E, P>>()),
     Effect.bind("fiber", ({ ref, pubsub }) => Effect.forkScoped(State<A, E, P>().pipe(
-        Effect.andThen(state => state.set(options?.refreshing
+        Effect.andThen(state => state.set(options?.refresh
             ? refreshing(options.previous, options?.initialProgress) as Result<A, E, P>
             : running(options?.initialProgress)
         ).pipe(
