@@ -5,10 +5,11 @@ import * as Result from "./Result.js"
 export const QueryTypeId: unique symbol = Symbol.for("@effect-fc/Query/Query")
 export type QueryTypeId = typeof QueryTypeId
 
-export interface Query<in out K extends readonly any[], in out A, in out E = never, out R = never, in out P = never>
+export interface Query<in out K extends readonly any[], in out A, in out E = never, in out R = never, in out P = never>
 extends Pipeable.Pipeable {
     readonly [QueryTypeId]: QueryTypeId
 
+    readonly context: Context.Context<Scope.Scope | R>
     readonly key: Stream.Stream<K>
     readonly f: (key: K) => Effect.Effect<A, E, R>
     readonly initialProgress: P
@@ -22,11 +23,12 @@ extends Pipeable.Pipeable {
     readonly refresh: Effect.Effect<Result.Result<A, E, P>, Cause.NoSuchElementException>
 }
 
-class QueryImpl<in out K extends readonly any[], in out A, in out E = never, in out R = never, in out P = never>
+export class QueryImpl<in out K extends readonly any[], in out A, in out E = never, in out R = never, in out P = never>
 extends Pipeable.Class() implements Query<K, A, E, R, P> {
     readonly [QueryTypeId]: QueryTypeId = QueryTypeId
 
     constructor(
+        readonly context: Context.Context<Scope.Scope | NoInfer<R>>,
         readonly key: Stream.Stream<K>,
         readonly f: (key: K) => Effect.Effect<A, E, R>,
         readonly initialProgress: P,
@@ -34,8 +36,6 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
         readonly latestKey: SubscriptionRef.SubscriptionRef<Option.Option<K>>,
         readonly fiber: SubscriptionRef.SubscriptionRef<Option.Option<Fiber.Fiber<A, E>>>,
         readonly result: SubscriptionRef.SubscriptionRef<Result.Result<A, E, P>>,
-
-        readonly context: Context.Context<Scope.Scope | NoInfer<R>>,
     ) {
         super()
     }
@@ -83,15 +83,15 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
     > {
         return this.result.pipe(
             Effect.map(previous => (Result.isSuccess(previous) || Result.isFailure(previous))
-                ? Option.some(previous)
-                : Option.none()
+                ? previous
+                : undefined
             ),
             Effect.andThen(previous => Result.unsafeForkEffect(
                 Effect.onExit(this.f(key), () => SubscriptionRef.set(this.fiber, Option.none())),
                 {
                     initialProgress: this.initialProgress,
-                    refresh: refresh && Option.isSome(previous),
-                    previous: Option.getOrUndefined(previous),
+                    refresh: refresh && previous,
+                    previous,
                 } as Result.unsafeForkEffect.Options<A, E, P>,
             )),
             Effect.tap(([, fiber]) => SubscriptionRef.set(this.fiber, Option.some(fiber))),
@@ -131,6 +131,7 @@ export const make = Effect.fnUntraced(function* <K extends readonly any[], A, E 
     Scope.Scope | Result.forkEffect.OutputContext<A, E, R, P>
 > {
     return new QueryImpl(
+        yield* Effect.context<Scope.Scope | Result.forkEffect.OutputContext<A, E, R, P>>(),
         options.key,
         options.f as any,
         options.initialProgress as P,
@@ -138,8 +139,6 @@ export const make = Effect.fnUntraced(function* <K extends readonly any[], A, E 
         yield* SubscriptionRef.make(Option.none<K>()),
         yield* SubscriptionRef.make(Option.none<Fiber.Fiber<A, E>>()),
         yield* SubscriptionRef.make(Result.initial<A, E, P>()),
-
-        yield* Effect.context<Scope.Scope | Result.forkEffect.OutputContext<A, E, R, P>>(),
     )
 })
 
