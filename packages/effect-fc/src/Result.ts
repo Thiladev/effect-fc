@@ -7,6 +7,10 @@ export type ResultTypeId = typeof ResultTypeId
 export type Result<A, E = never, P = never> = (
     | Initial
     | Running<P>
+    | Final<A, E, P>
+)
+
+export type Final<A, E = never, P = never> = (
     | Success<A>
     | (Success<A> & Refreshing<P>)
     | Failure<A, E>
