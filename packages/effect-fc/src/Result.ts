@@ -100,6 +100,7 @@ const ResultPrototype = Object.freeze({
 
 
 export const isResult = (u: unknown): u is Result<unknown, unknown, unknown> => Predicate.hasProperty(u, ResultTypeId)
+export const isFinal = (u: unknown): u is Final<unknown, unknown, unknown> => isResult(u) && (isSuccess(u) || isFailure(u))
 export const isInitial = (u: unknown): u is Initial => isResult(u) && u._tag === "Initial"
 export const isRunning = (u: unknown): u is Running<unknown> => isResult(u) && u._tag === "Running"
 export const isSuccess = (u: unknown): u is Success<unknown> => isResult(u) && u._tag === "Success"
@@ -121,6 +122,7 @@ export const fail = <E, A = never>(
     cause,
     previousSuccess: Option.fromNullable(previousSuccess),
 }, ResultPrototype)
+
 export const refreshing = <R extends Success<any> | Failure<any, any>, P = never>(
     result: R,
     progress?: P,
@@ -199,11 +201,11 @@ export namespace unsafeForkEffect {
 
     export type Options<A, E, P> = {
         readonly initialProgress?: P
-        readonly previous?: Success<A> | Failure<A, E>
+        readonly previous?: Final<A, E, P>
     } & (
         | {
             readonly refresh: true
-            readonly previous: Success<A> | Failure<A, E>
+            readonly previous: Final<A, E, P>
         }
         | {
             readonly refresh?: false

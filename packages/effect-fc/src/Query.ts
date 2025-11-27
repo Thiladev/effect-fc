@@ -18,9 +18,12 @@ extends Pipeable.Pipeable {
     readonly fiber: Subscribable.Subscribable<Option.Option<Fiber.Fiber<A, E>>>
     readonly result: Subscribable.Subscribable<Result.Result<A, E, P>>
 
-    fetch(key: K): Effect.Effect<Result.Result<A, E, P>>
-    readonly refetch: Effect.Effect<Result.Result<A, E, P>, Cause.NoSuchElementException>
-    readonly refresh: Effect.Effect<Result.Result<A, E, P>, Cause.NoSuchElementException>
+    fetch(key: K): Effect.Effect<Result.Final<A, E, P>>
+    fetchSubscribable(key: K): Effect.Effect<Subscribable.Subscribable<Result.Result<A, E, P>>>
+    readonly refetch: Effect.Effect<Result.Final<A, E, P>, Cause.NoSuchElementException>
+    readonly refetchSubscribable: Effect.Effect<Subscribable.Subscribable<Result.Result<A, E, P>>, Cause.NoSuchElementException>
+    readonly refresh: Effect.Effect<Result.Final<A, E, P>, Cause.NoSuchElementException>
+    readonly refreshSubscribable: Effect.Effect<Subscribable.Subscribable<Result.Result<A, E, P>>, Cause.NoSuchElementException>
 }
 
 export class QueryImpl<in out K extends readonly any[], in out A, in out E = never, in out R = never, in out P = never>
@@ -47,15 +50,20 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
         }))
     }
 
-    fetch(key: K): Effect.Effect<Result.Result<A, E, P>> {
+    fetch(key: K): Effect.Effect<Result.Final<A, E, P>> {
         return this.interrupt.pipe(
             Effect.andThen(SubscriptionRef.set(this.latestKey, Option.some(key))),
             Effect.andThen(Effect.provide(this.start(key), this.context)),
             Effect.andThen(sub => this.watch(sub)),
         )
     }
-
-    get refetch(): Effect.Effect<Result.Result<A, E, P>, Cause.NoSuchElementException> {
+    fetchSubscribable(key: K): Effect.Effect<Subscribable.Subscribable<Result.Result<A, E, P>>> {
+        return this.interrupt.pipe(
+            Effect.andThen(SubscriptionRef.set(this.latestKey, Option.some(key))),
+            Effect.andThen(Effect.provide(this.start(key), this.context)),
+        )
+    }
+    get refetch(): Effect.Effect<Result.Final<A, E, P>, Cause.NoSuchElementException> {
         return this.interrupt.pipe(
             Effect.andThen(this.latestKey),
             Effect.andThen(identity),
@@ -63,13 +71,26 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
             Effect.andThen(sub => this.watch(sub)),
         )
     }
-
-    get refresh(): Effect.Effect<Result.Result<A, E, P>, Cause.NoSuchElementException> {
+    get refetchSubscribable(): Effect.Effect<Subscribable.Subscribable<Result.Result<A, E, P>>, Cause.NoSuchElementException> {
+        return this.interrupt.pipe(
+            Effect.andThen(this.latestKey),
+            Effect.andThen(identity),
+            Effect.andThen(key => Effect.provide(this.start(key), this.context)),
+        )
+    }
+    get refresh(): Effect.Effect<Result.Final<A, E, P>, Cause.NoSuchElementException> {
         return this.interrupt.pipe(
             Effect.andThen(this.latestKey),
             Effect.andThen(identity),
             Effect.andThen(key => Effect.provide(this.start(key, true), this.context)),
             Effect.andThen(sub => this.watch(sub)),
+        )
+    }
+    get refreshSubscribable(): Effect.Effect<Subscribable.Subscribable<Result.Result<A, E, P>>, Cause.NoSuchElementException> {
+        return this.interrupt.pipe(
+            Effect.andThen(this.latestKey),
+            Effect.andThen(identity),
+            Effect.andThen(key => Effect.provide(this.start(key, true), this.context)),
         )
     }
 
@@ -82,7 +103,7 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
         Scope.Scope | R
     > {
         return this.result.pipe(
-            Effect.map(previous => (Result.isSuccess(previous) || Result.isFailure(previous))
+            Effect.map(previous => Result.isFinal(previous)
                 ? previous
                 : undefined
             ),
@@ -101,7 +122,7 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
 
     watch(
         sub: Subscribable.Subscribable<Result.Result<A, E, P>>
-    ): Effect.Effect<Result.Result<A, E, P>> {
+    ): Effect.Effect<Result.Final<A, E, P>> {
         return Effect.andThen(
             sub.get,
             initial => Stream.runFoldEffect(
@@ -109,7 +130,7 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
                 initial,
                 (_, result) => Effect.as(SubscriptionRef.set(this.result, result), result),
             ),
-        )
+        ) as Effect.Effect<Result.Final<A, E, P>>
     }
 }
 
