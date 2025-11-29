@@ -39,6 +39,8 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
         readonly latestKey: SubscriptionRef.SubscriptionRef<Option.Option<K>>,
         readonly fiber: SubscriptionRef.SubscriptionRef<Option.Option<Fiber.Fiber<A, E>>>,
         readonly result: SubscriptionRef.SubscriptionRef<Result.Result<A, E, P>>,
+
+        readonly runSemaphore: Effect.Semaphore,
     ) {
         super()
     }
@@ -160,6 +162,8 @@ export const make = Effect.fnUntraced(function* <K extends readonly any[], A, E 
         yield* SubscriptionRef.make(Option.none<K>()),
         yield* SubscriptionRef.make(Option.none<Fiber.Fiber<A, E>>()),
         yield* SubscriptionRef.make(Result.initial<A, E, P>()),
+
+        yield* Effect.makeSemaphore(1),
     )
 })
 
@@ -183,5 +187,6 @@ export const run = <K extends readonly any[], A, E, R, P>(
         Effect.andThen(_self.start(key)),
         Effect.andThen(sub => Effect.forkScoped(_self.watch(sub))),
         Effect.provide(_self.context),
+        _self.runSemaphore.withPermits(1),
     ))
 }
