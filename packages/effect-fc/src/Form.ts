@@ -1,7 +1,7 @@
 import { Array, Cause, Chunk, type Context, type Duration, Effect, Equal, Exit, Fiber, flow, Hash, HashMap, identity, Option, ParseResult, Pipeable, Predicate, Ref, Schema, type Scope, Stream } from "effect"
 import type * as React from "react"
 import * as Component from "./Component.js"
-import type * as Mutation from "./Mutation.js"
+import * as Mutation from "./Mutation.js"
 import * as PropertyPath from "./PropertyPath.js"
 import * as Result from "./Result.js"
 import * as Subscribable from "./Subscribable.js"
@@ -12,13 +12,16 @@ import * as SubscriptionSubRef from "./SubscriptionSubRef.js"
 export const FormTypeId: unique symbol = Symbol.for("@effect-fc/Form/Form")
 export type FormTypeId = typeof FormTypeId
 
-export interface Form<in out A, in out MA, in out I = A, in out R = never, in out ME = never, in out MR = never, in out MP = never>
+export interface Form<in out A, in out I = A, in out R = never, in out MA = void, in out ME = never, in out MR = never, in out MP = never>
 extends Pipeable.Pipeable {
     readonly [FormTypeId]: FormTypeId
 
     readonly schema: Schema.Schema<A, I, R>
     readonly context: Context.Context<Scope.Scope | R>
-    readonly mutation: Mutation.Mutation<readonly [value: A], MA, ME, MR, MP>
+    readonly mutation: Mutation.Mutation<
+        readonly [value: A, form: Form<A, I, R, unknown, unknown, unknown>],
+        MA, ME, MR, MP
+    >
     readonly autosubmit: boolean
     readonly debounce: Option.Option<Duration.DurationInput>
 
@@ -29,16 +32,23 @@ extends Pipeable.Pipeable {
 
     readonly canSubmit: Subscribable.Subscribable<boolean>
 
+    field<const P extends PropertyPath.Paths<I>>(
+        path: P
+    ): Effect.Effect<FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>>>
     readonly submit: Effect.Effect<Option.Option<Result.Final<MA, ME, MP>>, Cause.NoSuchElementException>
 }
 
-export class FormImpl<in out A, in out MA, in out I = A, in out R = never, in out ME = never, in out MR = never, in out MP = never>
-extends Pipeable.Class() implements Form<A, MA, I, R, ME, MR, MP> {
+export class FormImpl<in out A, in out I = A, in out R = never, in out MA = void, in out ME = never, in out MR = never, in out MP = never>
+extends Pipeable.Class() implements Form<A, I, R, MA, ME, MR, MP> {
     readonly [FormTypeId]: FormTypeId = FormTypeId
 
     constructor(
         readonly schema: Schema.Schema<A, I, R>,
-        readonly mutation: Mutation.Mutation<readonly [value: A], MA, ME, MR, MP>,
+        readonly context: Context.Context<Scope.Scope | R>,
+        readonly mutation: Mutation.Mutation<
+            readonly [value: A, form: Form<A, I, R, unknown, unknown, unknown>],
+            MA, ME, MR, MP
+        >,
         readonly autosubmit: boolean,
         readonly debounce: Option.Option<Duration.DurationInput>,
 
@@ -51,6 +61,21 @@ extends Pipeable.Class() implements Form<A, MA, I, R, ME, MR, MP> {
         readonly fieldCache: Ref.Ref<HashMap.HashMap<FormFieldKey, FormField<unknown, unknown>>>,
     ) {
         super()
+    }
+
+    field<const P extends PropertyPath.Paths<I>>(
+        path: P
+    ): Effect.Effect<FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>>> {
+        return this.fieldCache.pipe(
+            Effect.map(HashMap.get(new FormFieldKey(path))),
+            Effect.flatMap(Option.match({
+                onSome: v => Effect.succeed(v as FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>>),
+                onNone: () => Effect.tap(
+                    Effect.succeed(makeFormField(this as Form<A, I, R, MA, ME, MR, MP>, path)),
+                    v => Ref.update(this.fieldCache, HashMap.set(new FormFieldKey(path), v as FormField<unknown, unknown>)),
+                ),
+            })),
+        )
     }
 
     get canSubmit(): Subscribable.Subscribable<boolean> {
@@ -66,11 +91,16 @@ extends Pipeable.Class() implements Form<A, MA, I, R, ME, MR, MP> {
     }
 
     get submit(): Effect.Effect<Option.Option<Result.Final<MA, ME, MP>>, Cause.NoSuchElementException> {
+        return this.value.pipe(
+            Effect.andThen(identity),
+            Effect.andThen(value => this.submitValue(value)),
+        )
+    }
+    submitValue(value: A): Effect.Effect<Option.Option<Result.Final<MA, ME, MP>>> {
         return Effect.whenEffect(
-            this.value.pipe(
-                Effect.andThen(identity),
-                Effect.andThen(value => this.mutation.mutate([value])),
-                Effect.tap(result => Result.isFailure(result)
+            Effect.tap(
+                this.mutation.mutate([value, this as any]),
+                result => Result.isFailure(result)
                     ? Option.match(
                         Chunk.findFirst(
                             Cause.failures(result.cause as Cause.Cause<ParseResult.ParseError>),
@@ -82,9 +112,7 @@ extends Pipeable.Class() implements Form<A, MA, I, R, ME, MR, MP> {
                         },
                     )
                     : Effect.void
-                ),
             ),
-
             this.canSubmit.get,
         )
     }
@@ -93,50 +121,49 @@ extends Pipeable.Class() implements Form<A, MA, I, R, ME, MR, MP> {
 export const isForm = (u: unknown): u is Form<unknown, unknown, unknown, unknown, unknown, unknown> => Predicate.hasProperty(u, FormTypeId)
 
 export namespace make {
-    export interface Options<in out A, in out MA, in out I = A, in out R = never, in out ME = never, in out MR = never, in out MP = never> {
+    export interface Options<in out A, in out I = A, in out R = never, in out MA = void, in out ME = never, in out MR = never, in out MP = never>
+    extends Mutation.make.Options<
+        readonly [value: NoInfer<A>, form: Form<NoInfer<A>, NoInfer<I>, NoInfer<R>, unknown, unknown, unknown>],
+        MA, ME, MR, MP
+    > {
         readonly schema: Schema.Schema<A, I, R>
         readonly initialEncodedValue: NoInfer<I>
-        readonly onSubmit: (
-            this: Form<NoInfer<A>, NoInfer<I>, NoInfer<R>, unknown, unknown, unknown>,
-            value: NoInfer<A>,
-        ) => Effect.Effect<SA, SE, Result.forkEffect.InputContext<SR, NoInfer<SP>>>
-        readonly initialSubmitProgress?: SP
         readonly autosubmit?: boolean
         readonly debounce?: Duration.DurationInput
     }
-
-    export type Success<A, I, R, SA = void, SE = A, SR = never, SP = never> = (
-        Form<A, I, R, SA, SE, Exclude<SR, Result.Progress<any> | Result.Progress<never>>, SP>
-    )
 }
 
-export const make = Effect.fnUntraced(function* <A, I = A, R = never, SA = void, SE = A, SR = never, SP = never>(
-    options: make.Options<A, I, R, SA, SE, SR, SP>
-): Effect.fn.Return<make.Success<A, I, R, SA, SE, SR, SP>> {
-    const valueRef = yield* SubscriptionRef.make(Option.none<A>())
-    const errorRef = yield* SubscriptionRef.make(Option.none<ParseResult.ParseError>())
-    const validationFiberRef = yield* SubscriptionRef.make(Option.none<Fiber.Fiber<A, ParseResult.ParseError>>())
-
+export const make = Effect.fnUntraced(function* <A, I = A, R = never, MA = void, ME = never, MR = never, MP = never>(
+    options: make.Options<A, I, R, MA, ME, MR, MP>
+): Effect.fn.Return<
+    Form<A, I, R, MA, ME, Result.forkEffect.OutputContext<MA, ME, MR, MP>, MP>,
+    never,
+    Scope.Scope | R | Result.forkEffect.OutputContext<MA, ME, MR, MP>
+> {
     return new FormImpl(
         options.schema,
+        yield* Effect.context<Scope.Scope | R>(),
+        yield* Mutation.make(options),
         options.autosubmit ?? false,
         Option.fromNullable(options.debounce),
 
-        yield* Ref.make(HashMap.empty<FormFieldKey, FormField<unknown, unknown>>()),
-        valueRef,
+        yield* SubscriptionRef.make(Option.none<A>()),
         yield* SubscriptionRef.make(options.initialEncodedValue),
-        errorRef,
-        validationFiberRef,
+        yield* SubscriptionRef.make(Option.none<ParseResult.ParseError>()),
+        yield* SubscriptionRef.make(Option.none<Fiber.Fiber<A, ParseResult.ParseError>>()),
+
+        yield* Effect.makeSemaphore(1),
+        yield* Ref.make(HashMap.empty<FormFieldKey, FormField<unknown, unknown>>()),
     )
 })
 
-export const run = <A, MA, I, R, ME, MR, MP>(
-    self: Form<A, MA, I, R, ME, MR, MP>
+export const run = <A, I, R, MA, ME, MR, MP>(
+    self: Form<A, I, R, MA, ME, MR, MP>
 ): Effect.Effect<void> => {
-    const _self = self as FormImpl<A, MA, I, R, ME, MR, MP>
+    const _self = self as FormImpl<A, I, R, MA, ME, MR, MP>
     return _self.runSemaphore.withPermits(1)(Stream.runForEach(
         _self.encodedValue.changes.pipe(
-            Option.isSome(self.debounce) ? Stream.debounce(self.debounce.value) : identity
+            Option.isSome(_self.debounce) ? Stream.debounce(_self.debounce.value) : identity
         ),
 
         encodedValue => _self.validationFiber.pipe(
@@ -163,47 +190,32 @@ export const run = <A, MA, I, R, ME, MR, MP>(
                 )).pipe(
                     Effect.tap(fiber => Ref.set(_self.validationFiber, Option.some(fiber))),
                     Effect.andThen(Fiber.join),
-                    Effect.andThen(() => self.autosubmit
-                        ? Effect.asVoid(Effect.forkScoped(submit(self)))
+                    Effect.andThen(value => _self.autosubmit
+                        ? Effect.asVoid(Effect.forkScoped(_self.submitValue(value)))
                         : Effect.void
                     ),
                     Effect.forkScoped,
                 )
             ),
+            Effect.provide(_self.context),
         ),
     ))
 }
 
 export namespace service {
-    export interface Options<in out A, in out I, in out R, in out SA = void, in out SE = A, out SR = never, in out SP = never>
-    extends make.Options<A, I, R, SA, SE, SR, SP> {}
-
-    export type Return<A, I, R, SA = void, SE = A, SR = never, SP = never> = Effect.Effect<
-        Form<A, I, R, SA, SE, Exclude<SR, Result.Progress<any> | Result.Progress<never>>, SP>,
-        never,
-        Scope.Scope | R | Exclude<SR, Result.Progress<any> | Result.Progress<never>>
-    >
+    export interface Options<in out A, in out I = A, in out R = never, in out MA = void, in out ME = never, in out MR = never, in out MP = never>
+    extends make.Options<A, I, R, MA, ME, MR, MP> {}
 }
 
-export const service = <A, I = A, R = never, SA = void, SE = A, SR = never, SP = never>(
-    options: service.Options<A, I, R, SA, SE, SR, SP>
-): service.Return<A, I, R, SA, SE, SR, SP> => Effect.tap(
+export const service = <A, I = A, R = never, MA = void, ME = never, MR = never, MP = never>(
+    options: service.Options<A, I, R, MA, ME, MR, MP>
+): Effect.Effect<
+    Form<A, I, R, MA, ME, Result.forkEffect.OutputContext<MA, ME, MR, MP>, MP>,
+    never,
+    Scope.Scope | R | Result.forkEffect.OutputContext<MA, ME, MR, MP>
+> => Effect.tap(
     make(options),
     form => Effect.forkScoped(run(form)),
-)
-
-export const field = <A, I, R, SA, SE, SR, SP, const P extends PropertyPath.Paths<NoInfer<I>>>(
-    self: Form<A, I, R, SA, SE, SR, SP>,
-    path: P,
-): Effect.Effect<FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>>> => self.fieldCacheRef.pipe(
-    Effect.map(HashMap.get(new FormFieldKey(path))),
-    Effect.flatMap(Option.match({
-        onSome: v => Effect.succeed(v as FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>>),
-        onNone: () => Effect.tap(
-            Effect.succeed(makeFormField(self, path)),
-            v => Ref.update(self.fieldCacheRef, HashMap.set(new FormFieldKey(path), v as FormField<unknown, unknown>)),
-        ),
-    })),
 )
 
 
@@ -254,11 +266,11 @@ class FormFieldKey implements Equal.Equal {
 export const isFormField = (u: unknown): u is FormField<unknown, unknown> => Predicate.hasProperty(u, FormFieldTypeId)
 const isFormFieldKey = (u: unknown): u is FormFieldKey => Predicate.hasProperty(u, FormFieldKeyTypeId)
 
-export const makeFormField = <A, MA, I, R, ME, MR, MP, const P extends PropertyPath.Paths<NoInfer<I>>>(
-    self: Form<A, MA, I, R, ME, MR, MP>,
+export const makeFormField = <A, I, R, MA, ME, MR, MP, const P extends PropertyPath.Paths<NoInfer<I>>>(
+    self: Form<A, I, R, MA, ME, MR, MP>,
     path: P,
 ): FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>> => {
-    const _self = self as FormImpl<A, MA, I, R, ME, MR, MP>
+    const _self = self as FormImpl<A, I, R, MA, ME, MR, MP>
     return new FormFieldImpl(
         Subscribable.mapEffect(_self.value, Option.match({
             onSome: v => Option.map(PropertyPath.get(v, path), Option.some),
