@@ -18,7 +18,7 @@ extends Pipeable.Class() implements ErrorObserver<E> {
     readonly subscribe: Effect.Effect<Queue.Dequeue<Cause.Cause<E>>, never, Scope.Scope>
 
     constructor(
-        private readonly pubsub: PubSub.PubSub<Cause.Cause<E>>
+        readonly pubsub: PubSub.PubSub<Cause.Cause<E>>
     ) {
         super()
         this.subscribe = pubsub.subscribe
@@ -36,8 +36,9 @@ class ErrorObserverSupervisorImpl extends Supervisor.AbstractSupervisor<void> {
     }
 
     onEnd<A, E>(_value: Exit.Exit<A, E>): void {
-        if (Exit.isFailure(_value))
+        if (Exit.isFailure(_value)) {
             Effect.runSync(PubSub.publish(this.pubsub, _value.cause as Cause.Cause<never>))
+        }
     }
 }
 
