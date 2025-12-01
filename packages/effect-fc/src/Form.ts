@@ -64,11 +64,11 @@ extends Pipeable.Class() implements Form<A, I, R, MA, ME, MR, MP> {
 
         this.canSubmit = Subscribable.map(
             Subscribable.zipLatestAll(this.value, this.error, this.validationFiber, this.mutation.result),
-            ([value, error, validationFiber, submitResult]) => (
+            ([value, error, validationFiber, result]) => (
                 Option.isSome(value) &&
                 Option.isNone(error) &&
                 Option.isNone(validationFiber) &&
-                !(Result.isRunning(submitResult) || Result.isRefreshing(submitResult))
+                !(Result.isRunning(result) || Result.isRefreshing(result))
             ),
         )
     }
