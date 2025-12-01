@@ -54,9 +54,9 @@ class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
         ),
 
         initialEncodedValue: { email: "", password: "", birth: Option.none() },
-        f: Effect.fnUntraced(function*([v]) {
+        f: Effect.fnUntraced(function*([value]) {
             yield* Effect.sleep("500 millis")
-            return yield* Schema.decode(RegisterFormSubmitSchema)(v)
+            return yield* Schema.decode(RegisterFormSubmitSchema)(value)
         }),
         debounce: "500 millis",
     })

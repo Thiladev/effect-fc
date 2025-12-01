@@ -61,6 +61,16 @@ extends Pipeable.Class() implements Form<A, I, R, MA, ME, MR, MP> {
         readonly fieldCache: Ref.Ref<HashMap.HashMap<FormFieldKey, FormField<unknown, unknown>>>,
     ) {
         super()
+
+        this.canSubmit = Subscribable.map(
+            Subscribable.zipLatestAll(this.value, this.error, this.validationFiber, this.mutation.result),
+            ([value, error, validationFiber, submitResult]) => (
+                Option.isSome(value) &&
+                Option.isNone(error) &&
+                Option.isNone(validationFiber) &&
+                !(Result.isRunning(submitResult) || Result.isRefreshing(submitResult))
+            ),
+        )
     }
 
     field<const P extends PropertyPath.Paths<I>>(
@@ -78,17 +88,7 @@ extends Pipeable.Class() implements Form<A, I, R, MA, ME, MR, MP> {
         )
     }
 
-    get canSubmit(): Subscribable.Subscribable<boolean> {
-        return Subscribable.map(
-            Subscribable.zipLatestAll(this.value, this.error, this.validationFiber, this.mutation.result),
-            ([value, error, validationFiber, submitResult]) => (
-                Option.isSome(value) &&
-                Option.isNone(error) &&
-                Option.isNone(validationFiber) &&
-                !(Result.isRunning(submitResult) || Result.isRefreshing(submitResult))
-            ),
-        )
-    }
+    readonly canSubmit: Subscribable.Subscribable<boolean, never, never>
 
     get submit(): Effect.Effect<Option.Option<Result.Final<MA, ME, MP>>, Cause.NoSuchElementException> {
         return this.value.pipe(
