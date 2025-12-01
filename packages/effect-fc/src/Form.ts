@@ -304,12 +304,12 @@ export namespace useInput {
 export const useInput = Effect.fnUntraced(function* <A, I>(
     field: FormField<A, I>,
     options?: useInput.Options,
-): Effect.fn.Return<useInput.Result<I>, NoSuchElementException, Scope.Scope> {
+): Effect.fn.Return<useInput.Result<I>, Cause.NoSuchElementException, Scope.Scope> {
     const internalValueRef = yield* Component.useOnChange(() => Effect.tap(
-        Effect.andThen(field.encodedValueRef, SubscriptionRef.make),
+        Effect.andThen(field.encodedValue, SubscriptionRef.make),
         internalValueRef => Effect.forkScoped(Effect.all([
             Stream.runForEach(
-                Stream.drop(field.encodedValueRef, 1),
+                Stream.drop(field.encodedValue, 1),
                 upstreamEncodedValue => Effect.whenEffect(
                     Ref.set(internalValueRef, upstreamEncodedValue),
                     Effect.andThen(internalValueRef, internalValue => !Equal.equals(upstreamEncodedValue, internalValue)),
@@ -322,7 +322,7 @@ export const useInput = Effect.fnUntraced(function* <A, I>(
                     Stream.changesWith(Equal.equivalence()),
                     options?.debounce ? Stream.debounce(options.debounce) : identity,
                 ),
-                internalValue => Ref.set(field.encodedValueRef, internalValue),
+                internalValue => Ref.set(field.encodedValue, internalValue),
             ),
         ], { concurrency: "unbounded" })),
     ), [field, options?.debounce])
@@ -345,10 +345,10 @@ export namespace useOptionalInput {
 export const useOptionalInput = Effect.fnUntraced(function* <A, I>(
     field: FormField<A, Option.Option<I>>,
     options: useOptionalInput.Options<I>,
-): Effect.fn.Return<useOptionalInput.Result<I>, NoSuchElementException, Scope.Scope> {
+): Effect.fn.Return<useOptionalInput.Result<I>, Cause.NoSuchElementException, Scope.Scope> {
     const [enabledRef, internalValueRef] = yield* Component.useOnChange(() => Effect.tap(
         Effect.andThen(
-            field.encodedValueRef,
+            field.encodedValue,
             Option.match({
                 onSome: v => Effect.all([SubscriptionRef.make(true), SubscriptionRef.make(v)]),
                 onNone: () => Effect.all([SubscriptionRef.make(false), SubscriptionRef.make(options.defaultValue)]),
@@ -357,7 +357,7 @@ export const useOptionalInput = Effect.fnUntraced(function* <A, I>(
 
         ([enabledRef, internalValueRef]) => Effect.forkScoped(Effect.all([
             Stream.runForEach(
-                Stream.drop(field.encodedValueRef, 1),
+                Stream.drop(field.encodedValue, 1),
 
                 upstreamEncodedValue => Effect.whenEffect(
                     Option.match(upstreamEncodedValue, {
@@ -385,7 +385,7 @@ export const useOptionalInput = Effect.fnUntraced(function* <A, I>(
                     Stream.changesWith(Equal.equivalence()),
                     options?.debounce ? Stream.debounce(options.debounce) : identity,
                 ),
-                ([enabled, internalValue]) => Ref.set(field.encodedValueRef, enabled ? Option.some(internalValue) : Option.none()),
+                ([enabled, internalValue]) => Ref.set(field.encodedValue, enabled ? Option.some(internalValue) : Option.none()),
             ),
         ], { concurrency: "unbounded" })),
     ), [field, options.debounce])
