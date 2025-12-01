@@ -29,9 +29,9 @@ export class TextFieldFormInput extends Component.makeUntraced("TextFieldFormInp
         : { optional: false, ...yield* Form.useInput(props.field, props) }
 
     const [issues, isValidating, isSubmitting] = yield* Subscribable.useSubscribables([
-        props.field.issuesSubscribable,
-        props.field.isValidatingSubscribable,
-        props.field.isSubmittingSubscribable,
+        props.field.issues,
+        props.field.isValidating,
+        props.field.isSubmitting,
     ])
 
     return (

@@ -54,7 +54,7 @@ class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
         ),
 
         initialEncodedValue: { email: "", password: "", birth: Option.none() },
-        onSubmit: Effect.fnUntraced(function*(v) {
+        f: Effect.fnUntraced(function*([v]) {
             yield* Effect.sleep("500 millis")
             return yield* Schema.decode(RegisterFormSubmitSchema)(v)
         }),
@@ -65,8 +65,8 @@ class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
 class RegisterFormView extends Component.makeUntraced("RegisterFormView")(function*() {
     const form = yield* RegisterForm
     const [canSubmit, submitResult] = yield* Subscribable.useSubscribables([
-        form.canSubmitSubscribable,
-        form.submitResultRef,
+        form.canSubmit,
+        form.mutation.result,
     ])
 
     const runPromise = yield* Component.useRunPromise()
@@ -82,21 +82,21 @@ class RegisterFormView extends Component.makeUntraced("RegisterFormView")(functi
         <Container width="300">
             <form onSubmit={e => {
                 e.preventDefault()
-                void runPromise(Form.submit(form))
+                void runPromise(form.submit)
             }}>
                 <Flex direction="column" gap="2">
                     <TextFieldFormInputFC
-                        field={yield* Form.field(form, ["email"])}
+                        field={yield* form.field(["email"])}
                     />
 
                     <TextFieldFormInputFC
-                        field={yield* Form.field(form, ["password"])}
+                        field={yield* form.field(["password"])}
                     />
 
                     <TextFieldFormInputFC
                         optional
                         type="datetime-local"
-                        field={yield* Form.field(form, ["birth"])}
+                        field={yield* form.field(["birth"])}
                         defaultValue=""
                     />
 

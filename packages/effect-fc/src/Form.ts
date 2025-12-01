@@ -26,7 +26,7 @@ extends Pipeable.Pipeable {
     readonly debounce: Option.Option<Duration.DurationInput>
 
     readonly value: Subscribable.Subscribable<Option.Option<A>>
-    readonly encodedValue: Subscribable.Subscribable<I>
+    readonly encodedValue: SubscriptionRef.SubscriptionRef<I>
     readonly error: Subscribable.Subscribable<Option.Option<ParseResult.ParseError>>
     readonly validationFiber: Subscribable.Subscribable<Option.Option<Fiber.Fiber<A, ParseResult.ParseError>>>
 

@@ -54,17 +54,15 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
                     Match.exhaustive,
                 )
             ),
-            onSubmit: function(todo) {
-                return Match.value(props).pipe(
-                    Match.tag("new", () => Ref.update(state.ref, Chunk.prepend(todo)).pipe(
-                        Effect.andThen(makeTodo),
-                        Effect.andThen(Schema.encode(TodoFormSchema)),
-                        Effect.andThen(v => Ref.set(this.encodedValueRef, v)),
-                    )),
-                    Match.tag("edit", ({ id }) => Ref.set(state.getElementRef(id), todo)),
-                    Match.exhaustive,
-                )
-            },
+            f: ([todo, form]) => Match.value(props).pipe(
+                Match.tag("new", () => Ref.update(state.ref, Chunk.prepend(todo)).pipe(
+                    Effect.andThen(makeTodo),
+                    Effect.andThen(Schema.encode(TodoFormSchema)),
+                    Effect.andThen(v => Ref.set(form.encodedValue, v)),
+                )),
+                Match.tag("edit", ({ id }) => Ref.set(state.getElementRef(id), todo)),
+                Match.exhaustive,
+            ),
             autosubmit: props._tag === "edit",
             debounce: "250 millis",
         })
@@ -72,15 +70,15 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
         return [
             indexRef,
             form,
-            yield* Form.field(form, ["content"]),
-            yield* Form.field(form, ["completedAt"]),
+            yield* form.field(["content"]),
+            yield* form.field(["completedAt"]),
         ] as const
     }), [props._tag, props._tag === "edit" ? props.id : undefined])
 
     const [index, size, canSubmit] = yield* Subscribable.useSubscribables([
         indexRef,
         state.sizeSubscribable,
-        form.canSubmitSubscribable,
+        form.canSubmit,
     ])
 
     const runSync = yield* Component.useRunSync()
@@ -103,7 +101,7 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
                         />
 
                         {props._tag === "new" &&
-                            <Button disabled={!canSubmit} onClick={() => void runPromise(Form.submit(form))}>
+                            <Button disabled={!canSubmit} onClick={() => void runPromise(form.submit)}>
                                 Add
                             </Button>
                         }
