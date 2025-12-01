@@ -1,4 +1,4 @@
-import { Effect, Equivalence, pipe, type Scope, Stream, Subscribable } from "effect"
+import { Effect, Equivalence, Stream, Subscribable } from "effect"
 import * as React from "react"
 import * as Component from "./Component.js"
 
@@ -16,30 +16,35 @@ export const zipLatestAll = <const T extends readonly Subscribable.Subscribable<
     changes: Stream.zipLatestAll(...elements.map(v => v.changes)),
 }) as any
 
-export const useSubscribables: {
-    <const T extends readonly Subscribable.Subscribable<any, any, any>[]>(
-        ...elements: T
-    ): Effect.Effect<
-        [T[number]] extends [never]
-            ? never
-            : { [K in keyof T]: T[K] extends Subscribable.Subscribable<infer A, infer _E, infer _R> ? A : never },
-        [T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer E, infer _R> ? E : never,
-        ([T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer _E, infer R> ? R : never) | Scope.Scope
-    >
-} = Effect.fnUntraced(function* <const T extends readonly Subscribable.Subscribable<any, any, any>[]>(
-    ...elements: T
-) {
+export declare namespace useSubscribables {
+    export type Success<T extends readonly Subscribable.Subscribable<any, any, any>[]> = [T[number]] extends [never]
+        ? never
+        : { [K in keyof T]: T[K] extends Subscribable.Subscribable<infer A, infer _E, infer _R> ? A : never }
+
+    export interface Options<A> {
+        readonly equivalence?: Equivalence.Equivalence<A>
+    }
+}
+
+export const useSubscribables = Effect.fnUntraced(function* <const T extends readonly Subscribable.Subscribable<any, any, any>[]>(
+    elements: T,
+    options?: useSubscribables.Options<useSubscribables.Success<NoInfer<T>>>,
+): Effect.fn.Return<
+    useSubscribables.Success<T>,
+    [T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer E, infer _R> ? E : never,
+    [T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer _E, infer R> ? R : never
+> {
     const [reactStateValue, setReactStateValue] = React.useState(
         yield* Component.useOnMount(() => Effect.all(elements.map(v => v.get)))
     )
 
-    yield* Component.useReactEffect(() => Effect.forkScoped(pipe(
-        elements.map(ref => Stream.changesWith(ref.changes, Equivalence.strict())),
-        streams => Stream.zipLatestAll(...streams),
+    yield* Component.useReactEffect(() => Stream.zipLatestAll(...elements.map(ref => ref.changes)).pipe(
+        Stream.changesWith((options?.equivalence as Equivalence.Equivalence<any[]> | undefined) ?? Equivalence.array(Equivalence.strict())),
         Stream.runForEach(v =>
             Effect.sync(() => setReactStateValue(v))
         ),
-    )), elements)
+        Effect.forkScoped,
+    ), elements)
 
     return reactStateValue as any
 })

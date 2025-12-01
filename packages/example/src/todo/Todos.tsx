@@ -7,7 +7,7 @@ import { TodosState } from "./TodosState.service"
 
 export class Todos extends Component.makeUntraced("Todos")(function*() {
     const state = yield* TodosState
-    const [todos] = yield* Subscribable.useSubscribables(state.ref)
+    const [todos] = yield* Subscribable.useSubscribables([state.ref])
 
     yield* Component.useOnMount(() => Effect.andThen(
         Console.log("Todos mounted"),

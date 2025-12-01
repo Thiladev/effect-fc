@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ResultRouteImport } from './routes/result'
+import { Route as QueryRouteImport } from './routes/query'
 import { Route as FormRouteImport } from './routes/form'
 import { Route as BlankRouteImport } from './routes/blank'
 import { Route as IndexRouteImport } from './routes/index'
@@ -16,6 +18,16 @@ import { Route as DevMemoRouteImport } from './routes/dev/memo'
 import { Route as DevContextRouteImport } from './routes/dev/context'
 import { Route as DevAsyncRenderingRouteImport } from './routes/dev/async-rendering'
 
+const ResultRoute = ResultRouteImport.update({
+  id: '/result',
+  path: '/result',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QueryRoute = QueryRouteImport.update({
+  id: '/query',
+  path: '/query',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FormRoute = FormRouteImport.update({
   id: '/form',
   path: '/form',
@@ -51,6 +63,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/blank': typeof BlankRoute
   '/form': typeof FormRoute
+  '/query': typeof QueryRoute
+  '/result': typeof ResultRoute
   '/dev/async-rendering': typeof DevAsyncRenderingRoute
   '/dev/context': typeof DevContextRoute
   '/dev/memo': typeof DevMemoRoute
@@ -59,6 +73,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/blank': typeof BlankRoute
   '/form': typeof FormRoute
+  '/query': typeof QueryRoute
+  '/result': typeof ResultRoute
   '/dev/async-rendering': typeof DevAsyncRenderingRoute
   '/dev/context': typeof DevContextRoute
   '/dev/memo': typeof DevMemoRoute
@@ -68,6 +84,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/blank': typeof BlankRoute
   '/form': typeof FormRoute
+  '/query': typeof QueryRoute
+  '/result': typeof ResultRoute
   '/dev/async-rendering': typeof DevAsyncRenderingRoute
   '/dev/context': typeof DevContextRoute
   '/dev/memo': typeof DevMemoRoute
@@ -78,6 +96,8 @@ export interface FileRouteTypes {
     | '/'
     | '/blank'
     | '/form'
+    | '/query'
+    | '/result'
     | '/dev/async-rendering'
     | '/dev/context'
     | '/dev/memo'
@@ -86,6 +106,8 @@ export interface FileRouteTypes {
     | '/'
     | '/blank'
     | '/form'
+    | '/query'
+    | '/result'
     | '/dev/async-rendering'
     | '/dev/context'
     | '/dev/memo'
@@ -94,6 +116,8 @@ export interface FileRouteTypes {
     | '/'
     | '/blank'
     | '/form'
+    | '/query'
+    | '/result'
     | '/dev/async-rendering'
     | '/dev/context'
     | '/dev/memo'
@@ -103,6 +127,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BlankRoute: typeof BlankRoute
   FormRoute: typeof FormRoute
+  QueryRoute: typeof QueryRoute
+  ResultRoute: typeof ResultRoute
   DevAsyncRenderingRoute: typeof DevAsyncRenderingRoute
   DevContextRoute: typeof DevContextRoute
   DevMemoRoute: typeof DevMemoRoute
@@ -110,6 +136,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/result': {
+      id: '/result'
+      path: '/result'
+      fullPath: '/result'
+      preLoaderRoute: typeof ResultRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/query': {
+      id: '/query'
+      path: '/query'
+      fullPath: '/query'
+      preLoaderRoute: typeof QueryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/form': {
       id: '/form'
       path: '/form'
@@ -159,6 +199,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BlankRoute: BlankRoute,
   FormRoute: FormRoute,
+  QueryRoute: QueryRoute,
+  ResultRoute: ResultRoute,
   DevAsyncRenderingRoute: DevAsyncRenderingRoute,
   DevContextRoute: DevContextRoute,
   DevMemoRoute: DevMemoRoute,

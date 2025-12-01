@@ -1,6 +1,6 @@
-import { Button, Container, Flex } from "@radix-ui/themes"
+import { Button, Container, Flex, Text } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
-import { Console, Effect, Option, ParseResult, Schema } from "effect"
+import { Console, Effect, Match, Option, ParseResult, Schema } from "effect"
 import { Component, Form, Subscribable } from "effect-fc"
 import { TextFieldFormInput } from "@/lib/form/TextFieldFormInput"
 import { DateTimeUtcFromZonedInput } from "@/lib/schema"
@@ -23,6 +23,21 @@ const RegisterFormSchema = Schema.Struct({
     birth: Schema.OptionFromSelf(DateTimeUtcFromZonedInput),
 })
 
+const RegisterFormSubmitSchema = Schema.Struct({
+    email: Schema.transformOrFail(
+        Schema.String,
+        Schema.String,
+        {
+            decode: (input, _options, ast) => input !== "admin@admin.com"
+                ? ParseResult.succeed(input)
+                : ParseResult.fail(new ParseResult.Type(ast, input, "This email is already in use.")),
+            encode: ParseResult.succeed,
+        },
+    ),
+    password: Schema.String,
+    birth: Schema.OptionFromSelf(Schema.DateTimeUtcFromSelf),
+})
+
 class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
     scoped: Form.service({
         schema: RegisterFormSchema.pipe(
@@ -39,19 +54,22 @@ class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
         ),
 
         initialEncodedValue: { email: "", password: "", birth: Option.none() },
-        onSubmit: v => Effect.sleep("500 millis").pipe(
-            Effect.andThen(Console.log(v)),
-            Effect.andThen(Effect.sync(() => alert("Done!"))),
-        ),
+        f: Effect.fnUntraced(function*([value]) {
+            yield* Effect.sleep("500 millis")
+            return yield* Schema.decode(RegisterFormSubmitSchema)(value)
+        }),
         debounce: "500 millis",
     })
 }) {}
 
 class RegisterFormView extends Component.makeUntraced("RegisterFormView")(function*() {
     const form = yield* RegisterForm
-    const submit = yield* Form.useSubmit(form)
-    const [canSubmit] = yield* Subscribable.useSubscribables(form.canSubmitSubscribable)
+    const [canSubmit, submitResult] = yield* Subscribable.useSubscribables([
+        form.canSubmit,
+        form.mutation.result,
+    ])
 
+    const runPromise = yield* Component.useRunPromise()
     const TextFieldFormInputFC = yield* TextFieldFormInput
 
     yield* Component.useOnMount(() => Effect.gen(function*() {
@@ -64,27 +82,35 @@ class RegisterFormView extends Component.makeUntraced("RegisterFormView")(functi
         <Container width="300">
             <form onSubmit={e => {
                 e.preventDefault()
-                void submit()
+                void runPromise(form.submit)
             }}>
                 <Flex direction="column" gap="2">
                     <TextFieldFormInputFC
-                        field={Form.useField(form, ["email"])}
+                        field={yield* form.field(["email"])}
                     />
 
                     <TextFieldFormInputFC
-                        field={Form.useField(form, ["password"])}
+                        field={yield* form.field(["password"])}
                     />
 
                     <TextFieldFormInputFC
                         optional
                         type="datetime-local"
-                        field={Form.useField(form, ["birth"])}
+                        field={yield* form.field(["birth"])}
                         defaultValue=""
                     />
 
                     <Button disabled={!canSubmit}>Submit</Button>
                 </Flex>
             </form>
+
+            {Match.value(submitResult).pipe(
+                Match.tag("Initial", () => <></>),
+                Match.tag("Running", () => <Text>Submitting...</Text>),
+                Match.tag("Success", () => <Text>Submitted successfully!</Text>),
+                Match.tag("Failure", e => <Text>Error: {e.cause.toString()}</Text>),
+                Match.exhaustive,
+            )}
         </Container>
     )
 }) {}
